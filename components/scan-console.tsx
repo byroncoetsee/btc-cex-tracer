@@ -1,32 +1,48 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Cpu, Play, Server, Loader2, Plus, X, KeyRound, Wallet, Trash2, Zap, Search, ChevronRight, Square, Lock, Unlock } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import type { LookupGroup, TraceResult, WatchEntry } from "@/lib/types"
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Cpu,
+  Play,
+  Server,
+  Loader2,
+  Plus,
+  X,
+  KeyRound,
+  Wallet,
+  Trash2,
+  Zap,
+  Search,
+  ChevronRight,
+  Square,
+  Lock,
+  Unlock,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import type { LookupGroup, TraceResult, WatchEntry } from "@/lib/types";
 
 interface NodeTestResult {
-  ok: boolean
-  server?: string
-  protocol?: string
-  satoshiBalance?: { confirmed: number; unconfirmed: number; confirmedBtc: number }
-  error?: string
+  ok: boolean;
+  server?: string;
+  protocol?: string;
+  satoshiBalance?: { confirmed: number; unconfirmed: number; confirmedBtc: number };
+  error?: string;
 }
 
 interface ScanConsoleProps {
-  nodeAddress: string
-  onNodeAddressChange: (addr: string) => void
-  onNodeStatus: (online: boolean) => void
-  watchlist: WatchEntry[]
-  onAddWatch: (values: string[]) => number
-  onRemoveWatch: (id: string) => void
-  onClearWatch: () => void
-  onComplete: (results: TraceResult[]) => void
+  nodeAddress: string;
+  onNodeAddressChange: (addr: string) => void;
+  onNodeStatus: (online: boolean) => void;
+  watchlist: WatchEntry[];
+  onAddWatch: (values: string[]) => number;
+  onRemoveWatch: (id: string) => void;
+  onClearWatch: () => void;
+  onComplete: (results: TraceResult[]) => void;
 }
 
-const DEPTHS = [2, 3, 4, 5, 6]
+const DEPTHS = [2, 3, 4, 5, 6];
 
 export function ScanConsole({
   nodeAddress,
@@ -38,79 +54,75 @@ export function ScanConsole({
   onClearWatch,
   onComplete,
 }: ScanConsoleProps) {
-  const [entryInput, setEntryInput] = useState("")
-  const [useTls, setUseTls] = useState(false)
-  const [depth, setDepth] = useState(4)
-  const [running, setRunning] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<NodeTestResult | null>(null)
-  const [looking, setLooking] = useState(false)
-  const [lookupGroups, setLookupGroups] = useState<LookupGroup[] | null>(null)
-  const [lookupError, setLookupError] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [log, setLog] = useState<string[]>([])
-  const logEndRef = useRef<HTMLDivElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const [entryInput, setEntryInput] = useState("");
+  const [useTls, setUseTls] = useState(false);
+  const [depth, setDepth] = useState(4);
+  const [running, setRunning] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<NodeTestResult | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [lookupGroups, setLookupGroups] = useState<LookupGroup[] | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [log, setLog] = useState<string[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // only auto-scroll if user is already near the bottom
   useEffect(() => {
-    const container = logEndRef.current?.parentElement
-    if (!container) return
-    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60
-    if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [log])
+    const container = logEndRef.current?.parentElement;
+    if (!container) return;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+    if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [log]);
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), [])
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   // prune selection when entries are removed
   useEffect(() => {
     setSelected((prev) => {
-      const ids = new Set(watchlist.map((w) => w.id))
-      const next = new Set([...prev].filter((id) => ids.has(id)))
-      return next.size === prev.size ? prev : next
-    })
-  }, [watchlist])
+      const ids = new Set(watchlist.map((w) => w.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [watchlist]);
 
   // entries to trace = selected, or all if nothing selected
-  const targets = useMemo(
-    () => (selected.size ? watchlist.filter((w) => selected.has(w.id)) : watchlist),
-    [watchlist, selected],
-  )
+  const targets = useMemo(() => (selected.size ? watchlist.filter((w) => selected.has(w.id)) : watchlist), [watchlist, selected]);
 
-  const canRun = nodeAddress.trim().length > 0 && targets.length > 0 && !running
-  const canTest = nodeAddress.trim().length > 0 && !testing
+  const canRun = nodeAddress.trim().length > 0 && targets.length > 0 && !running;
+  const canTest = nodeAddress.trim().length > 0 && !testing;
 
   async function handleTest() {
-    if (!canTest) return
-    setTesting(true)
-    setTestResult(null)
+    if (!canTest) return;
+    setTesting(true);
+    setTestResult(null);
     try {
       const res = await fetch("/api/node/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nodeAddress: nodeAddress.trim(), tls: useTls }),
-      })
-      const data: NodeTestResult = await res.json()
-      setTestResult(data)
-      onNodeStatus(data.ok)
+      });
+      const data: NodeTestResult = await res.json();
+      setTestResult(data);
+      onNodeStatus(data.ok);
     } catch {
-      setTestResult({ ok: false, error: "Network request failed" })
-      onNodeStatus(false)
+      setTestResult({ ok: false, error: "Network request failed" });
+      onNodeStatus(false);
     } finally {
-      setTesting(false)
+      setTesting(false);
     }
   }
 
-  const canLookup =
-    nodeAddress.trim().length > 0 && targets.length > 0 && !looking && !running
+  const canLookup = nodeAddress.trim().length > 0 && targets.length > 0 && !looking && !running;
 
   async function handleLookup() {
-    if (!canLookup) return
-    setLooking(true)
-    setLookupGroups(null)
-    setLookupError(null)
+    if (!canLookup) return;
+    setLooking(true);
+    setLookupGroups(null);
+    setLookupError(null);
     try {
       const res = await fetch("/api/address/lookup", {
         method: "POST",
@@ -120,45 +132,45 @@ export function ScanConsole({
           entries: targets.map((t) => ({ value: t.value, kind: t.kind })),
           tls: useTls,
         }),
-      })
-      const data = await res.json()
+      });
+      const data = await res.json();
       if (data.ok) {
-        setLookupGroups(data.groups as LookupGroup[])
+        setLookupGroups(data.groups as LookupGroup[]);
       } else {
-        setLookupError(data.error ?? "Lookup failed")
+        setLookupError(data.error ?? "Lookup failed");
       }
     } catch {
-      setLookupError("Network request failed")
+      setLookupError("Network request failed");
     } finally {
-      setLooking(false)
+      setLooking(false);
     }
   }
 
   function handleAdd() {
     // support comma / whitespace / newline separated batch input
-    const values = entryInput.split(/[\s,]+/).filter(Boolean)
-    if (!values.length) return
-    onAddWatch(values)
-    setEntryInput("")
+    const values = entryInput.split(/[\s,]+/).filter(Boolean);
+    if (!values.length) return;
+    onAddWatch(values);
+    setEntryInput("");
   }
 
   function toggle(id: string) {
     setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function handleStop() {
-    abortRef.current?.abort()
-    abortRef.current = null
+    abortRef.current?.abort();
+    abortRef.current = null;
   }
 
   // extract funded addresses from lookup results for tracing
   const fundedSources = useMemo(() => {
-    if (!lookupGroups) return []
+    if (!lookupGroups) return [];
     return lookupGroups.flatMap((g) =>
       g.results
         .filter((r) => !r.error && r.confirmed > 0)
@@ -168,19 +180,18 @@ export function ScanConsole({
           balanceBtc: r.confirmedBtc,
           txCount: 0,
         })),
-    )
-  }, [lookupGroups])
+    );
+  }, [lookupGroups]);
 
-  const canTrace =
-    nodeAddress.trim().length > 0 && fundedSources.length > 0 && !running && !looking
+  const canTrace = nodeAddress.trim().length > 0 && fundedSources.length > 0 && !running && !looking;
 
   async function handleRun() {
-    if (!canTrace) return
-    setRunning(true)
-    setLog([])
+    if (!canTrace) return;
+    setRunning(true);
+    setLog([]);
 
-    const controller = new AbortController()
-    abortRef.current = controller
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const res = await fetch("/api/trace", {
@@ -193,55 +204,52 @@ export function ScanConsole({
           tls: useTls,
         }),
         signal: controller.signal,
-      })
+      });
 
       if (!res.body) {
-        setLog((prev) => [...prev, "> error: no response stream"])
-        setRunning(false)
-        return
+        setLog((prev) => [...prev, "> error: no response stream"]);
+        setRunning(false);
+        return;
       }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ""
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
 
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        buf += decoder.decode(value, { stream: true })
-        const parts = buf.split("\n\n")
-        buf = parts.pop() ?? ""
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
 
         for (const part of parts) {
-          const eventMatch = part.match(/^event:\s*(.+)$/m)
-          const dataMatch = part.match(/^data:\s*(.+)$/m)
-          if (!eventMatch || !dataMatch) continue
+          const eventMatch = part.match(/^event:\s*(.+)$/m);
+          const dataMatch = part.match(/^data:\s*(.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
 
-          const event = eventMatch[1]
-          const data = JSON.parse(dataMatch[1])
+          const event = eventMatch[1];
+          const data = JSON.parse(dataMatch[1]);
 
           if (event === "log") {
-            setLog((prev) => [...prev, data.message])
+            setLog((prev) => [...prev, data.message]);
           } else if (event === "done" && data.result) {
-            onComplete([data.result as TraceResult])
+            onComplete([data.result as TraceResult]);
           } else if (event === "error") {
-            setLog((prev) => [...prev, `> ERROR: ${data.message}`])
+            setLog((prev) => [...prev, `> ERROR: ${data.message}`]);
           }
         }
       }
     } catch (err) {
       if (controller.signal.aborted) {
-        setLog((prev) => [...prev, "> trace aborted"])
+        setLog((prev) => [...prev, "> trace aborted"]);
       } else {
-        setLog((prev) => [
-          ...prev,
-          `> ERROR: ${err instanceof Error ? err.message : "trace failed"}`,
-        ])
+        setLog((prev) => [...prev, `> ERROR: ${err instanceof Error ? err.message : "trace failed"}`]);
       }
     } finally {
-      abortRef.current = null
-      setRunning(false)
+      abortRef.current = null;
+      setRunning(false);
     }
   }
 
@@ -250,18 +258,13 @@ export function ScanConsole({
       <div className="mb-4 flex items-center gap-2 border-b border-border pb-3">
         <Cpu className="size-4 text-primary" />
         <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-primary">scan console</h2>
-        <span className="ml-auto text-[10px] uppercase tracking-widest text-muted-foreground">
-          no data leaves this terminal
-        </span>
+        <span className="ml-auto text-[10px] uppercase tracking-widest text-muted-foreground">no data leaves this terminal</span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_2fr]">
         {/* node address */}
         <div className="space-y-1.5">
-          <Label
-            htmlFor="node"
-            className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground"
-          >
+          <Label htmlFor="node" className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
             <Server className="size-3" /> bitcoin node (fulcrum / electrumx)
           </Label>
           <div className="flex gap-2 items-center">
@@ -269,28 +272,33 @@ export function ScanConsole({
               id="node"
               value={nodeAddress}
               onChange={(e) => {
-                onNodeAddressChange(e.target.value)
-                setTestResult(null)
-                onNodeStatus(false)
+                onNodeAddressChange(e.target.value);
+                setTestResult(null);
+                onNodeStatus(false);
               }}
               placeholder="umbrel.local:50002  /  192.168.1.42:50002"
               className="border-input bg-background font-mono text-sm text-primary placeholder:text-muted-foreground/60 focus-visible:ring-primary"
               spellCheck={false}
               autoComplete="off"
             />
-            <label className="flex shrink-0 items-center gap-1.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={useTls}
-                onChange={(e) => {
-                  setUseTls(e.target.checked)
-                  setTestResult(null)
-                  onNodeStatus(false)
-                }}
-                className="size-3.5 accent-primary"
-              />
-              <span className="text-[11px] uppercase tracking-widest text-muted-foreground">tls</span>
-            </label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setUseTls((prev) => !prev);
+                setTestResult(null);
+                onNodeStatus(false);
+              }}
+              className={`shrink-0 gap-1.5 font-bold uppercase tracking-widest ${
+                useTls
+                  ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/20"
+                  : "border-border bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              }`}
+              aria-pressed={useTls}
+            >
+              {useTls ? <Lock className="size-4" /> : <Unlock className="size-4" />}
+              tls
+            </Button>
             <Button
               onClick={handleTest}
               disabled={!canTest}
@@ -336,10 +344,7 @@ export function ScanConsole({
 
         {/* add address / xpub */}
         <div className="space-y-1.5">
-          <Label
-            htmlFor="entry"
-            className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground"
-          >
+          <Label htmlFor="entry" className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
             <KeyRound className="size-3" /> add xpub / address
             <span className="text-muted-foreground/50">(paste multiple, comma or space separated)</span>
           </Label>
@@ -369,25 +374,19 @@ export function ScanConsole({
       <div className="mt-4 rounded-sm border border-border bg-background/60 p-3">
         <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">
           <span>watchlist</span>
-          <span className="rounded-sm bg-secondary px-1.5 text-[10px] text-secondary-foreground">
-            {watchlist.length}
-          </span>
+          <span className="rounded-sm bg-secondary px-1.5 text-[10px] text-secondary-foreground">{watchlist.length}</span>
           {watchlist.length > 0 && (
             <>
               <button
-                onClick={() =>
-                  setSelected((prev) =>
-                    prev.size === watchlist.length ? new Set() : new Set(watchlist.map((w) => w.id)),
-                  )
-                }
+                onClick={() => setSelected((prev) => (prev.size === watchlist.length ? new Set() : new Set(watchlist.map((w) => w.id))))}
                 className="ml-2 text-primary hover:text-glow"
               >
                 {selected.size === watchlist.length ? "deselect all" : "select all"}
               </button>
               <button
                 onClick={() => {
-                  onClearWatch()
-                  setSelected(new Set())
+                  onClearWatch();
+                  setSelected(new Set());
                 }}
                 className="ml-auto flex items-center gap-1 text-destructive hover:underline"
               >
@@ -404,8 +403,8 @@ export function ScanConsole({
         ) : (
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {watchlist.map((w) => {
-              const active = selected.size === 0 || selected.has(w.id)
-              const Icon = w.kind === "xpub" ? KeyRound : Wallet
+              const active = selected.size === 0 || selected.has(w.id);
+              const Icon = w.kind === "xpub" ? KeyRound : Wallet;
               return (
                 <li
                   key={w.id}
@@ -437,7 +436,7 @@ export function ScanConsole({
                     <X className="size-3.5" />
                   </button>
                 </li>
-              )
+              );
             })}
           </ul>
         )}
@@ -469,9 +468,7 @@ export function ScanConsole({
           className="h-9 gap-1.5 bg-primary font-bold uppercase tracking-widest text-primary-foreground hover:bg-primary/90"
         >
           {looking ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-          {looking
-            ? "looking up"
-            : `lookup${targets.length > 1 ? ` · ${targets.length}` : ""}`}
+          {looking ? "looking up" : `lookup${targets.length > 1 ? ` · ${targets.length}` : ""}`}
         </Button>
 
         {running ? (
@@ -492,18 +489,12 @@ export function ScanConsole({
             className="h-9 gap-1.5 border-primary/50 bg-transparent font-bold uppercase tracking-widest text-primary hover:bg-primary/10"
           >
             <Play className="size-4" />
-            {fundedSources.length
-              ? `trace${fundedSources.length > 1 ? ` · ${fundedSources.length} addr` : ""}`
-              : "trace"}
+            {fundedSources.length ? `trace${fundedSources.length > 1 ? ` · ${fundedSources.length} addr` : ""}` : "trace"}
           </Button>
         )}
 
         <span className="text-[11px] text-muted-foreground">
-          {watchlist.length === 0
-            ? "add addresses to get started"
-            : selected.size
-              ? `${selected.size} selected`
-              : "all entries targeted"}
+          {watchlist.length === 0 ? "add addresses to get started" : selected.size ? `${selected.size} selected` : "all entries targeted"}
         </span>
       </div>
 
@@ -516,45 +507,36 @@ export function ScanConsole({
       {lookupGroups && lookupGroups.length > 0 && (
         <div className="mt-4 space-y-3">
           {lookupGroups.map((group) => {
-            const funded = group.results.filter((r) => !r.error && r.confirmed > 0)
-            const totalBtc = group.results.reduce((sum, r) => sum + r.confirmedBtc, 0)
-            const totalUnconf = group.results.reduce((sum, r) => sum + r.unconfirmed, 0)
-            const isXpub = group.kind === "xpub"
-            const isOpen = !isXpub || expanded.has(group.input)
+            const funded = group.results.filter((r) => !r.error && r.confirmed > 0);
+            const totalBtc = group.results.reduce((sum, r) => sum + r.confirmedBtc, 0);
+            const totalUnconf = group.results.reduce((sum, r) => sum + r.unconfirmed, 0);
+            const isXpub = group.kind === "xpub";
+            const isOpen = !isXpub || expanded.has(group.input);
 
             return (
-              <div
-                key={group.input}
-                className="rounded-sm border border-border bg-background/60 overflow-hidden"
-              >
+              <div key={group.input} className="rounded-sm border border-border bg-background/60 overflow-hidden">
                 {/* group header */}
                 <button
                   type="button"
                   onClick={() => {
-                    if (!isXpub) return
+                    if (!isXpub) return;
                     setExpanded((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(group.input)) next.delete(group.input)
-                      else next.add(group.input)
-                      return next
-                    })
+                      const next = new Set(prev);
+                      if (next.has(group.input)) next.delete(group.input);
+                      else next.add(group.input);
+                      return next;
+                    });
                   }}
                   className={`flex w-full flex-wrap items-center gap-2 px-3 py-2 text-[11px] text-left ${
                     isOpen && group.results.length > 0 ? "border-b border-border" : ""
                   } ${isXpub ? "bg-card/60 hover:bg-card/80 cursor-pointer" : "bg-card/60 cursor-default"}`}
                 >
                   {isXpub && (
-                    <ChevronRight
-                      className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${
-                        isOpen ? "rotate-90" : ""
-                      }`}
-                    />
+                    <ChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
                   )}
                   <span
                     className={`rounded-sm px-1.5 py-0.5 uppercase tracking-widest ${
-                      isXpub
-                        ? "bg-accent/15 text-accent"
-                        : "bg-primary/15 text-primary"
+                      isXpub ? "bg-accent/15 text-accent" : "bg-primary/15 text-primary"
                     }`}
                   >
                     {group.kind}
@@ -568,9 +550,7 @@ export function ScanConsole({
                     </span>
                   )}
                   <div className="ml-auto shrink-0 text-right font-mono">
-                    <span className="text-primary text-glow font-bold">
-                      {totalBtc.toFixed(8)}
-                    </span>
+                    <span className="text-primary text-glow font-bold">{totalBtc.toFixed(8)}</span>
                     <span className="text-muted-foreground"> BTC</span>
                     {totalUnconf !== 0 && (
                       <span className="ml-2 text-amber-400">
@@ -587,16 +567,10 @@ export function ScanConsole({
                       <div
                         key={r.address}
                         className={`flex items-center gap-3 px-3 py-2 text-xs font-mono ${
-                          r.confirmedBtc === 0 && !r.error
-                            ? "text-muted-foreground/50"
-                            : ""
+                          r.confirmedBtc === 0 && !r.error ? "text-muted-foreground/50" : ""
                         }`}
                       >
-                        {r.scheme && (
-                          <span className="shrink-0 w-10 text-[10px] text-accent/70">
-                            {r.scheme.replace("BIP", "")}
-                          </span>
-                        )}
+                        {r.scheme && <span className="shrink-0 w-10 text-[10px] text-accent/70">{r.scheme.replace("BIP", "")}</span>}
                         {r.path && (
                           <span className="shrink-0 w-14 text-muted-foreground">
                             {r.path}
@@ -608,13 +582,7 @@ export function ScanConsole({
                           <span className="text-destructive">{r.error}</span>
                         ) : (
                           <div className="shrink-0 text-right">
-                            <span
-                              className={
-                                r.confirmedBtc > 0
-                                  ? "text-primary text-glow"
-                                  : "text-muted-foreground/50"
-                              }
-                            >
+                            <span className={r.confirmedBtc > 0 ? "text-primary text-glow" : "text-muted-foreground/50"}>
                               {r.confirmedBtc.toFixed(8)}
                             </span>
                             <span className="text-muted-foreground"> BTC</span>
@@ -631,23 +599,15 @@ export function ScanConsole({
                   </div>
                 )}
               </div>
-            )
+            );
           })}
           {/* grand total across all groups */}
           {lookupGroups.length > 1 && (
             <div className="flex items-center gap-3 rounded-sm border border-primary/40 bg-primary/5 px-3 py-3 text-xs font-mono">
-              <span className="flex-1 uppercase tracking-widest text-primary">
-                grand total
-              </span>
+              <span className="flex-1 uppercase tracking-widest text-primary">grand total</span>
               <div className="shrink-0 text-right">
                 <span className="text-primary text-glow font-bold text-sm">
-                  {lookupGroups
-                    .reduce(
-                      (sum, g) =>
-                        sum + g.results.reduce((s, r) => s + r.confirmedBtc, 0),
-                      0,
-                    )
-                    .toFixed(8)}
+                  {lookupGroups.reduce((sum, g) => sum + g.results.reduce((s, r) => s + r.confirmedBtc, 0), 0).toFixed(8)}
                 </span>
                 <span className="text-muted-foreground"> BTC</span>
               </div>
@@ -669,11 +629,11 @@ export function ScanConsole({
         </div>
       )}
     </section>
-  )
+  );
 }
 
 // Bitcoin address pattern: 1/3/bc1 followed by alphanum
-const ADDR_RE = /\b((?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62})/g
+const ADDR_RE = /\b((?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62})/g;
 
 function LogLine({ line }: { line: string }) {
   const cls = line.includes("CEX FOUND")
@@ -688,20 +648,20 @@ function LogLine({ line }: { line: string }) {
             ? "text-primary text-glow"
             : line.startsWith("    ")
               ? "text-muted-foreground/70"
-              : "text-muted-foreground"
+              : "text-muted-foreground";
 
   // split line into text and clickable address spans
-  const parts: (string | { addr: string })[] = []
-  let lastIdx = 0
+  const parts: (string | { addr: string })[] = [];
+  let lastIdx = 0;
   for (const m of line.matchAll(ADDR_RE)) {
-    if (m.index! > lastIdx) parts.push(line.slice(lastIdx, m.index!))
-    parts.push({ addr: m[1] })
-    lastIdx = m.index! + m[0].length
+    if (m.index! > lastIdx) parts.push(line.slice(lastIdx, m.index!));
+    parts.push({ addr: m[1] });
+    lastIdx = m.index! + m[0].length;
   }
-  if (lastIdx < line.length) parts.push(line.slice(lastIdx))
+  if (lastIdx < line.length) parts.push(line.slice(lastIdx));
 
   if (parts.length <= 1) {
-    return <div className={cls}>{line}</div>
+    return <div className={cls}>{line}</div>;
   }
 
   return (
@@ -721,5 +681,5 @@ function LogLine({ line }: { line: string }) {
         ),
       )}
     </div>
-  )
+  );
 }
