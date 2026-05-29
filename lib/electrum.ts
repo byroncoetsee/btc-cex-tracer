@@ -3,7 +3,7 @@ import * as net from "net"
 
 /**
  * Minimal Electrum protocol client for Fulcrum / ElectrumX.
- * Supports both TLS (port 50002) and plain TCP (port 50001).
+ * Supports both TLS and plain TCP, remembers which works.
  */
 
 interface ElectrumResponse {
@@ -14,23 +14,32 @@ interface ElectrumResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Connection helpers
+// Connection helpers — remembers protocol per host:port
 // ---------------------------------------------------------------------------
 
-/** Try TLS first; on any TLS failure fall back to plain TCP. */
 function connectSocket(
+  host: string,
+  port: number,
+  timeoutMs: number,
+  useTls: boolean,
+): Promise<net.Socket> {
+  return useTls
+    ? connectTLS(host, port, timeoutMs)
+    : connectPlain(host, port, timeoutMs)
+}
+
+function connectTLS(
   host: string,
   port: number,
   timeoutMs: number,
 ): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let settled = false
-
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true
         socket.destroy()
-        reject(new Error(`Connection timed out after ${timeoutMs}ms`))
+        reject(new Error("TLS timeout"))
       }
     }, timeoutMs)
 
@@ -45,13 +54,12 @@ function connectSocket(
       },
     )
 
-    socket.on("error", () => {
+    socket.on("error", (err) => {
       if (!settled) {
         settled = true
         clearTimeout(timer)
         socket.destroy()
-        // Any TLS failure → retry with plain TCP
-        connectPlain(host, port, timeoutMs).then(resolve, reject)
+        reject(err)
       }
     })
   })
@@ -64,12 +72,11 @@ function connectPlain(
 ): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let settled = false
-
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true
         socket.destroy()
-        reject(new Error(`Plain TCP connection timed out after ${timeoutMs}ms`))
+        reject(new Error("TCP timeout"))
       }
     }, timeoutMs)
 
@@ -108,16 +115,16 @@ export class ElectrumSession {
     private host: string,
     private port: number,
     private timeoutMs = 30000,
+    private useTls = false,
   ) {}
 
   async connect(): Promise<void> {
-    this.socket = await connectSocket(this.host, this.port, this.timeoutMs)
+    this.socket = await connectSocket(this.host, this.port, this.timeoutMs, this.useTls)
     this.socket.setEncoding("utf8")
     this.buf = ""
 
     this.socket.on("data", (chunk: string) => {
       this.buf += chunk
-      // process all complete lines
       let idx: number
       while ((idx = this.buf.indexOf("\n")) !== -1) {
         const line = this.buf.slice(0, idx)
@@ -177,16 +184,26 @@ export class ElectrumSession {
   }
 
   /**
-   * Send multiple RPC calls pipelined (all at once) and collect responses.
-   * Much faster than sequential send-wait-send-wait.
+   * Send multiple RPC calls pipelined and collect responses.
+   * Chunks into groups to avoid overwhelming the server.
    */
   async batch(
     calls: { method: string; params: unknown[] }[],
+    chunkSize = 50,
   ): Promise<ElectrumResponse[]> {
     if (!this.socket) throw new Error("Not connected")
-    // send all requests in one write
-    const promises = calls.map((c) => this.call(c.method, c.params))
-    return Promise.all(promises)
+    if (calls.length <= chunkSize) {
+      return Promise.all(calls.map((c) => this.call(c.method, c.params)))
+    }
+    const results: ElectrumResponse[] = []
+    for (let i = 0; i < calls.length; i += chunkSize) {
+      const chunk = calls.slice(i, i + chunkSize)
+      const chunkResults = await Promise.all(
+        chunk.map((c) => this.call(c.method, c.params)),
+      )
+      results.push(...chunkResults)
+    }
+    return results
   }
 
   close(): void {
@@ -196,18 +213,18 @@ export class ElectrumSession {
 }
 
 // ---------------------------------------------------------------------------
-// Convenience wrappers (kept for backward compat with the test endpoint)
+// Convenience wrappers
 // ---------------------------------------------------------------------------
 
-/** Open a connection, send one RPC call, read the response, then close. */
 export async function electrumCall(
   host: string,
   port: number,
   method: string,
   params: unknown[] = [],
   timeoutMs = 8000,
+  useTls = false,
 ): Promise<ElectrumResponse> {
-  const session = new ElectrumSession(host, port, timeoutMs)
+  const session = new ElectrumSession(host, port, timeoutMs, useTls)
   await session.connect()
   try {
     return await session.call(method, params)
@@ -216,7 +233,6 @@ export async function electrumCall(
   }
 }
 
-/** Parse "host" or "host:port" — defaults to port 50002 (Electrum TLS). */
 export function parseNodeAddress(raw: string): { host: string; port: number } {
   const trimmed = raw.trim()
   const match = trimmed.match(/^(.+):(\d+)$/)

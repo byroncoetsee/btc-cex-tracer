@@ -1,11 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Cpu, Play, Server, Loader2, Plus, X, KeyRound, Wallet, Trash2, Zap, Search, ChevronRight } from "lucide-react"
+import { Cpu, Play, Server, Loader2, Plus, X, KeyRound, Wallet, Trash2, Zap, Search, ChevronRight, Square, Lock, Unlock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { runTrace } from "@/lib/tracer"
 import type { LookupGroup, TraceResult, WatchEntry } from "@/lib/types"
 
 interface NodeTestResult {
@@ -40,6 +39,7 @@ export function ScanConsole({
   onComplete,
 }: ScanConsoleProps) {
   const [entryInput, setEntryInput] = useState("")
+  const [useTls, setUseTls] = useState(false)
   const [depth, setDepth] = useState(4)
   const [running, setRunning] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -51,10 +51,15 @@ export function ScanConsole({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [log, setLog] = useState<string[]>([])
   const logEndRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
 
+  // only auto-scroll if user is already near the bottom
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    const container = logEndRef.current?.parentElement
+    if (!container) return
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60
+    if (atBottom) logEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [log])
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
@@ -85,7 +90,7 @@ export function ScanConsole({
       const res = await fetch("/api/node/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeAddress: nodeAddress.trim() }),
+        body: JSON.stringify({ nodeAddress: nodeAddress.trim(), tls: useTls }),
       })
       const data: NodeTestResult = await res.json()
       setTestResult(data)
@@ -113,6 +118,7 @@ export function ScanConsole({
         body: JSON.stringify({
           nodeAddress: nodeAddress.trim(),
           entries: targets.map((t) => ({ value: t.value, kind: t.kind })),
+          tls: useTls,
         }),
       })
       const data = await res.json()
@@ -145,54 +151,98 @@ export function ScanConsole({
     })
   }
 
-  function pushLine(line: string, delay: number) {
-    timers.current.push(setTimeout(() => setLog((prev) => [...prev, line]), delay))
+  function handleStop() {
+    abortRef.current?.abort()
+    abortRef.current = null
   }
 
-  function handleRun() {
-    if (!canRun) return
+  // extract funded addresses from lookup results for tracing
+  const fundedSources = useMemo(() => {
+    if (!lookupGroups) return []
+    return lookupGroups.flatMap((g) =>
+      g.results
+        .filter((r) => !r.error && r.confirmed > 0)
+        .map((r) => ({
+          address: r.address,
+          derivationPath: r.path ?? "direct",
+          balanceBtc: r.confirmedBtc,
+          txCount: 0,
+        })),
+    )
+  }, [lookupGroups])
+
+  const canTrace =
+    nodeAddress.trim().length > 0 && fundedSources.length > 0 && !running && !looking
+
+  async function handleRun() {
+    if (!canTrace) return
     setRunning(true)
     setLog([])
 
-    const node = nodeAddress.trim()
-    const results = targets.map((t) =>
-      runTrace({ label: t.value, nodeAddress: node, depth }),
-    )
-    const totalScanned = results.reduce((a, r) => a + r.addressesScanned, 0)
-    const totalSources = results.reduce((a, r) => a + r.sources.length, 0)
+    const controller = new AbortController()
+    abortRef.current = controller
 
-    const lines: string[] = [
-      `$ connect ${node}:8333`,
-      `> handshake OK · protocol 70016 · services=NODE_NETWORK`,
-      `> queue: ${targets.length} key${targets.length > 1 ? "s" : ""} (${targets.filter((t) => t.kind === "xpub").length} xpub · ${targets.filter((t) => t.kind === "address").length} addr)`,
-    ]
-    targets.forEach((t, i) => {
-      const r = results[i]
-      lines.push(`> [${i + 1}/${targets.length}] deriving ${t.kind} [${t.value.slice(0, 16)}…]`)
-      lines.push(`    ↳ ${r.sources.length} used addresses · max-depth=${depth}`)
-    })
-    lines.push(
-      `> walking transaction graph ........`,
-      `> checking counterparties against CEX signature db`,
-      `> ${totalScanned} nodes visited across ${totalSources} sources`,
-      `> reconstructing paths to exchange endpoints`,
-      `> scoring obscurity [tx 40% · cp 50% · hop 10%]`,
-      `> TRACE COMPLETE · ${results.length} report${results.length > 1 ? "s" : ""} generated`,
-    )
+    try {
+      const res = await fetch("/api/trace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodeAddress: nodeAddress.trim(),
+          sources: fundedSources,
+          depth,
+          tls: useTls,
+        }),
+        signal: controller.signal,
+      })
 
-    let t = 220
-    lines.forEach((line, i) => {
-      const step = 140 + Math.random() * 280
-      pushLine(line, t)
-      t += line.includes("walking") ? step + 650 : step
-    })
-
-    timers.current.push(
-      setTimeout(() => {
+      if (!res.body) {
+        setLog((prev) => [...prev, "> error: no response stream"])
         setRunning(false)
-        onComplete(results)
-      }, t + 250),
-    )
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buf += decoder.decode(value, { stream: true })
+        const parts = buf.split("\n\n")
+        buf = parts.pop() ?? ""
+
+        for (const part of parts) {
+          const eventMatch = part.match(/^event:\s*(.+)$/m)
+          const dataMatch = part.match(/^data:\s*(.+)$/m)
+          if (!eventMatch || !dataMatch) continue
+
+          const event = eventMatch[1]
+          const data = JSON.parse(dataMatch[1])
+
+          if (event === "log") {
+            setLog((prev) => [...prev, data.message])
+          } else if (event === "done" && data.result) {
+            onComplete([data.result as TraceResult])
+          } else if (event === "error") {
+            setLog((prev) => [...prev, `> ERROR: ${data.message}`])
+          }
+        }
+      }
+    } catch (err) {
+      if (controller.signal.aborted) {
+        setLog((prev) => [...prev, "> trace aborted"])
+      } else {
+        setLog((prev) => [
+          ...prev,
+          `> ERROR: ${err instanceof Error ? err.message : "trace failed"}`,
+        ])
+      }
+    } finally {
+      abortRef.current = null
+      setRunning(false)
+    }
   }
 
   return (
@@ -214,7 +264,7 @@ export function ScanConsole({
           >
             <Server className="size-3" /> bitcoin node (fulcrum / electrumx)
           </Label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Input
               id="node"
               value={nodeAddress}
@@ -228,6 +278,19 @@ export function ScanConsole({
               spellCheck={false}
               autoComplete="off"
             />
+            <label className="flex shrink-0 items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={useTls}
+                onChange={(e) => {
+                  setUseTls(e.target.checked)
+                  setTestResult(null)
+                  onNodeStatus(false)
+                }}
+                className="size-3.5 accent-primary"
+              />
+              <span className="text-[11px] uppercase tracking-widest text-muted-foreground">tls</span>
+            </label>
             <Button
               onClick={handleTest}
               disabled={!canTest}
@@ -411,17 +474,29 @@ export function ScanConsole({
             : `lookup${targets.length > 1 ? ` · ${targets.length}` : ""}`}
         </Button>
 
-        <Button
-          onClick={handleRun}
-          disabled={!canRun}
-          variant="outline"
-          className="h-9 gap-1.5 border-primary/50 bg-transparent font-bold uppercase tracking-widest text-primary hover:bg-primary/10"
-        >
-          {running ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-          {running
-            ? "tracing"
-            : `run trace${targets.length > 1 ? ` · ${targets.length} keys` : ""}`}
-        </Button>
+        {running ? (
+          <Button
+            onClick={handleStop}
+            variant="outline"
+            className="h-9 gap-1.5 border-destructive/50 bg-transparent font-bold uppercase tracking-widest text-destructive hover:bg-destructive/10"
+          >
+            <Square className="size-4" />
+            stop
+          </Button>
+        ) : (
+          <Button
+            onClick={handleRun}
+            disabled={!canTrace}
+            variant="outline"
+            title={!fundedSources.length ? "run a lookup first to discover funded addresses" : undefined}
+            className="h-9 gap-1.5 border-primary/50 bg-transparent font-bold uppercase tracking-widest text-primary hover:bg-primary/10"
+          >
+            <Play className="size-4" />
+            {fundedSources.length
+              ? `trace${fundedSources.length > 1 ? ` · ${fundedSources.length} addr` : ""}`
+              : "trace"}
+          </Button>
+        )}
 
         <span className="text-[11px] text-muted-foreground">
           {watchlist.length === 0
@@ -582,30 +657,69 @@ export function ScanConsole({
       )}
 
       {(running || log.length > 0) && (
-        <div className="relative mt-4 max-h-52 overflow-y-auto rounded-sm border border-border bg-background/80 p-3 text-xs leading-relaxed">
+        <div className="relative mt-4 max-h-80 overflow-y-auto rounded-sm border border-border bg-background/80 p-3 text-xs leading-relaxed">
           {running && (
             <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-primary/10 to-transparent scan-sweep" />
           )}
           {log.map((line, i) => (
-            <div
-              key={i}
-              className={
-                line.startsWith("$")
-                  ? "text-accent"
-                  : line.includes("COMPLETE")
-                    ? "text-primary text-glow"
-                    : line.startsWith("    ")
-                      ? "text-muted-foreground/70"
-                      : "text-muted-foreground"
-              }
-            >
-              {line}
-            </div>
+            <LogLine key={i} line={line} />
           ))}
           {running && <span className="text-primary caret">█</span>}
           <div ref={logEndRef} />
         </div>
       )}
     </section>
+  )
+}
+
+// Bitcoin address pattern: 1/3/bc1 followed by alphanum
+const ADDR_RE = /\b((?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62})/g
+
+function LogLine({ line }: { line: string }) {
+  const cls = line.includes("CEX FOUND")
+    ? "text-destructive font-bold"
+    : line.includes("possible CEX")
+      ? "text-accent font-bold"
+      : line.includes("ERROR")
+        ? "text-destructive"
+        : line.startsWith("$")
+          ? "text-accent"
+          : line.includes("COMPLETE")
+            ? "text-primary text-glow"
+            : line.startsWith("    ")
+              ? "text-muted-foreground/70"
+              : "text-muted-foreground"
+
+  // split line into text and clickable address spans
+  const parts: (string | { addr: string })[] = []
+  let lastIdx = 0
+  for (const m of line.matchAll(ADDR_RE)) {
+    if (m.index! > lastIdx) parts.push(line.slice(lastIdx, m.index!))
+    parts.push({ addr: m[1] })
+    lastIdx = m.index! + m[0].length
+  }
+  if (lastIdx < line.length) parts.push(line.slice(lastIdx))
+
+  if (parts.length <= 1) {
+    return <div className={cls}>{line}</div>
+  }
+
+  return (
+    <div className={cls}>
+      {parts.map((p, i) =>
+        typeof p === "string" ? (
+          <span key={i}>{p}</span>
+        ) : (
+          <span
+            key={i}
+            className="cursor-pointer underline decoration-dotted underline-offset-2 hover:text-primary"
+            title="click to copy"
+            onClick={() => navigator.clipboard.writeText(p.addr)}
+          >
+            {p.addr}
+          </span>
+        ),
+      )}
+    </div>
   )
 }

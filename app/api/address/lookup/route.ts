@@ -36,8 +36,7 @@ function isXpub(value: string): boolean {
  */
 async function lookupXpub(
   extKey: string,
-  host: string,
-  port: number,
+  session: ElectrumSession,
 ): Promise<LookupGroup> {
   const group: LookupGroup = {
     input: extKey,
@@ -45,9 +44,6 @@ async function lookupXpub(
     derivedCount: 0,
     results: [],
   }
-
-  const session = new ElectrumSession(host, port)
-  await session.connect()
 
   try {
     const hdkey = toHDKey(extKey)
@@ -188,8 +184,14 @@ async function lookupXpub(
         }
       }
     }
-  } finally {
-    session.close()
+  } catch (err) {
+    group.results.push({
+      address: extKey,
+      confirmed: 0,
+      unconfirmed: 0,
+      confirmedBtc: 0,
+      error: err instanceof Error ? err.message : "Lookup failed",
+    })
   }
 
   return group
@@ -197,9 +199,10 @@ async function lookupXpub(
 
 export async function POST(req: Request) {
   try {
-    const { nodeAddress, entries } = (await req.json()) as {
+    const { nodeAddress, entries, tls: useTls } = (await req.json()) as {
       nodeAddress?: string
       entries?: { value: string; kind: string }[]
+      tls?: boolean
     }
 
     if (!nodeAddress?.trim()) {
@@ -216,45 +219,22 @@ export async function POST(req: Request) {
     }
 
     const { host, port } = parseNodeAddress(nodeAddress)
-    const groups: LookupGroup[] = []
 
-    // xpubs — each gets its own connection, all run in parallel
-    const xpubEntries = entries.filter((e) => isXpub(e.value))
-    if (xpubEntries.length) {
-      const xpubResults = await Promise.allSettled(
-        xpubEntries.map((entry) => lookupXpub(entry.value, host, port)),
-      )
-      for (let i = 0; i < xpubEntries.length; i++) {
-        const result = xpubResults[i]
-        if (result.status === "fulfilled") {
-          groups.push(result.value)
-        } else {
-          groups.push({
-            input: xpubEntries[i].value,
-            kind: "xpub",
-            results: [
-              {
-                address: xpubEntries[i].value,
-                confirmed: 0,
-                unconfirmed: 0,
-                confirmedBtc: 0,
-                error:
-                  result.reason instanceof Error
-                    ? result.reason.message
-                    : "Derivation failed",
-              },
-            ],
-          })
-        }
+    // single shared session for everything
+    const session = new ElectrumSession(host, port, 30000, useTls ?? false)
+    await session.connect()
+
+    try {
+      const groups: LookupGroup[] = []
+
+      // xpubs — sequential on shared session
+      for (const entry of entries.filter((e) => isXpub(e.value))) {
+        groups.push(await lookupXpub(entry.value, session))
       }
-    }
 
-    // plain addresses — one shared connection, one pipelined batch
-    const addrs = entries.filter((e) => !isXpub(e.value)).map((e) => e.value)
-    if (addrs.length) {
-      const session = new ElectrumSession(host, port)
-      await session.connect()
-      try {
+      // plain addresses — one pipelined batch
+      const addrs = entries.filter((e) => !isXpub(e.value)).map((e) => e.value)
+      if (addrs.length) {
         const lookups = addrs.map((addr) => {
           try {
             return { address: addr, scripthash: addressToScripthash(addr) }
@@ -317,12 +297,12 @@ export async function POST(req: Request) {
           }
           groups.push(group)
         }
-      } finally {
-        session.close()
       }
-    }
 
-    return NextResponse.json({ ok: true, groups })
+      return NextResponse.json({ ok: true, groups })
+    } finally {
+      session.close()
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error"
     return NextResponse.json({ ok: false, error: message })

@@ -9,7 +9,11 @@
       "Bash(node -e ':*)",
       "Bash(npx tsx -e ':*)",
       "Bash(node -e \"try { require\\('@noble/curves/secp256k1'\\); console.log\\('OK'\\) } catch\\(e\\) { console.log\\(e.code\\) }\")",
-      "Bash(node -e \"const p = require\\('./node_modules/@noble/curves/package.json'\\); console.log\\(p.version\\); console.log\\(Object.keys\\(p.exports || {}\\).filter\\(k => k.includes\\('secp'\\)\\).join\\('\\\\n'\\)\\)\")"
+      "Bash(node -e \"const p = require\\('./node_modules/@noble/curves/package.json'\\); console.log\\(p.version\\); console.log\\(Object.keys\\(p.exports || {}\\).filter\\(k => k.includes\\('secp'\\)\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(wc -l \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/public/cex_addresses/\"*_addresses.csv)",
+      "Bash(timeout 12 npx tsx -e ':*)",
+      "Bash(ls -lt \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/\"*.log)",
+      "Bash(ls -lt \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/PYTHON/\"*.log)"
     ]
   }
 }

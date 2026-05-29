@@ -7,7 +7,7 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const { nodeAddress } = (await req.json()) as { nodeAddress?: string }
+    const { nodeAddress, tls: useTls } = (await req.json()) as { nodeAddress?: string; tls?: boolean }
     if (!nodeAddress?.trim()) {
       return NextResponse.json(
         { ok: false, error: "No node address provided" },
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const versionRes = await electrumCall(host, port, "server.version", [
       "BTC-Tracer", // client name
       "1.4",        // protocol version
-    ])
+    ], 8000, useTls ?? false)
     if (versionRes.error) {
       return NextResponse.json({
         ok: false,
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
       port,
       "blockchain.scripthash.get_balance",
       [SATOSHI_SCRIPTHASH],
+      8000,
+      useTls ?? false,
     )
     if (balanceRes.error) {
       return NextResponse.json({
