@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/PYTHON/temp.py\" -type f -exec wc -l {} \\\\;)",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const s = require\\('@noble/hashes/sha256'\\); console.log\\(typeof s.sha256\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(npx tsx -e ':*)",
+      "Bash(node -e \"try { require\\('@noble/curves/secp256k1'\\); console.log\\('OK'\\) } catch\\(e\\) { console.log\\(e.code\\) }\")",
+      "Bash(node -e \"const p = require\\('./node_modules/@noble/curves/package.json'\\); console.log\\(p.version\\); console.log\\(Object.keys\\(p.exports || {}\\).filter\\(k => k.includes\\('secp'\\)\\).join\\('\\\\n'\\)\\)\")"
+    ]
+  }
+}
