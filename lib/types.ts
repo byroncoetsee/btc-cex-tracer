@@ -1,4 +1,4 @@
-export type LinkStrength = "VERY STRONG" | "STRONG" | "MODERATE" | "WEAK" | "VERY WEAK";
+export type LinkStrength = "DEFINITIVE" | "VERY STRONG" | "STRONG" | "MODERATE" | "WEAK" | "VERY WEAK" | "TENUOUS" | "NEGLIGIBLE";
 
 export interface IntermediateWallet {
   address: string;

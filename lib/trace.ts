@@ -109,11 +109,14 @@ function calcCexConfidence(flag: "CEX" | "possible CEX"): number {
 }
 
 function strengthFromScore(score: number): LinkStrength {
+  if (score < 10) return "DEFINITIVE";
   if (score < 20) return "VERY STRONG";
-  if (score < 35) return "STRONG";
-  if (score < 55) return "MODERATE";
-  if (score < 75) return "WEAK";
-  return "VERY WEAK";
+  if (score < 30) return "STRONG";
+  if (score < 42) return "MODERATE";
+  if (score < 55) return "WEAK";
+  if (score < 70) return "VERY WEAK";
+  if (score < 85) return "TENUOUS";
+  return "NEGLIGIBLE";
 }
 
 function directnessLabel(histLen: number): string {

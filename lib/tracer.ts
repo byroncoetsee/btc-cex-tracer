@@ -55,11 +55,14 @@ function pick<T>(rng: () => number, arr: T[]): T {
 }
 
 function strengthFromScore(score: number): LinkStrength {
+  if (score < 10) return "DEFINITIVE";
   if (score < 20) return "VERY STRONG";
-  if (score < 35) return "STRONG";
-  if (score < 55) return "MODERATE";
-  if (score < 75) return "WEAK";
-  return "VERY WEAK";
+  if (score < 30) return "STRONG";
+  if (score < 42) return "MODERATE";
+  if (score < 55) return "WEAK";
+  if (score < 70) return "VERY WEAK";
+  if (score < 85) return "TENUOUS";
+  return "NEGLIGIBLE";
 }
 
 function directnessLabel(txCount: number, counterparties: number): string {
@@ -199,6 +202,8 @@ export function runTrace(input: ScanInput): TraceResult {
 
 export function strengthColor(strength: LinkStrength): string {
   switch (strength) {
+    case "DEFINITIVE":
+      return "text-destructive";
     case "VERY STRONG":
       return "text-destructive";
     case "STRONG":
@@ -206,8 +211,12 @@ export function strengthColor(strength: LinkStrength): string {
     case "MODERATE":
       return "text-accent";
     case "WEAK":
-      return "text-primary";
+      return "text-accent";
     case "VERY WEAK":
+      return "text-primary";
+    case "TENUOUS":
+      return "text-muted-foreground";
+    case "NEGLIGIBLE":
       return "text-muted-foreground";
   }
 }

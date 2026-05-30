@@ -71,12 +71,15 @@ export function riskLabel(score: number | null): {
   label: string
   tone: "danger" | "warn" | "ok" | "none"
 } {
-  if (score === null) return { label: "NO LINK", tone: "ok" }
-  if (score < 20) return { label: "CRITICAL", tone: "danger" }
-  if (score < 35) return { label: "HIGH", tone: "danger" }
-  if (score < 55) return { label: "MEDIUM", tone: "warn" }
-  if (score < 75) return { label: "LOW", tone: "ok" }
-  return { label: "MINIMAL", tone: "ok" }
+  if (score === null) return { label: "NO LINK", tone: "none" }
+  if (score < 10) return { label: "CRITICAL", tone: "danger" }
+  if (score < 20) return { label: "SEVERE", tone: "danger" }
+  if (score < 30) return { label: "HIGH", tone: "danger" }
+  if (score < 42) return { label: "ELEVATED", tone: "warn" }
+  if (score < 55) return { label: "MODERATE", tone: "warn" }
+  if (score < 70) return { label: "LOW", tone: "ok" }
+  if (score < 85) return { label: "MINOR", tone: "ok" }
+  return { label: "NEGLIGIBLE", tone: "ok" }
 }
 
 export function allLinks(trace: TraceResult): { source: string; link: CexLink }[] {
