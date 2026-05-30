@@ -64,10 +64,13 @@ export function LinkCard({ sourceAddress, link }: LinkCardProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 py-4 md:grid-cols-3">
-        <ScoreBar label="tx obscurity" value={link.breakdown.transaction} weight="·40%" />
-        <ScoreBar label="counterparty" value={link.breakdown.counterparty} weight="·50%" />
-        <ScoreBar label="hop obscurity" value={link.breakdown.hop} weight="·10%" />
+      <div className="grid gap-4 py-4 sm:grid-cols-2 md:grid-cols-3">
+        <ScoreBar label="tx obscurity" value={link.breakdown.transaction} weight="·20%" />
+        <ScoreBar label="counterparty" value={link.breakdown.counterparty} weight="·25%" />
+        <ScoreBar label="hop depth" value={link.breakdown.hop} weight="·15%" />
+        <ScoreBar label="value dilution" value={link.breakdown.valueContinuity} weight="·20%" />
+        <ScoreBar label="fan-out" value={link.breakdown.fanOut} weight="·15%" />
+        <ScoreBar label="cex confidence" value={link.breakdown.cexConfidence} weight="·5%" />
       </div>
 
       <div className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -89,6 +92,12 @@ export function LinkCard({ sourceAddress, link }: LinkCardProps) {
               <div className="flex items-center gap-4 text-muted-foreground">
                 <span>{w.txCount} tx</span>
                 <span>{w.uniqueCounterparties} cp</span>
+                {w.outputCount != null && (
+                  <span>{w.outputCount} out</span>
+                )}
+                {w.valuePassthrough != null && (
+                  <span>{(w.valuePassthrough * 100).toFixed(0)}% fwd</span>
+                )}
                 {w.isPossibleCex && (
                   <span className="text-accent">possible CEX</span>
                 )}

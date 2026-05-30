@@ -6,12 +6,19 @@ export interface IntermediateWallet {
   uniqueCounterparties: number;
   directness: string;
   isPossibleCex: boolean;
+  /** Ratio of value forwarded to next hop (0-1). Undefined when data unavailable. */
+  valuePassthrough?: number;
+  /** Number of outputs in the connecting transaction. */
+  outputCount?: number;
 }
 
 export interface ObscurityBreakdown {
-  transaction: number; // 0-100 (weighted 40%)
-  counterparty: number; // 0-100 (weighted 50%)
-  hop: number; // 0-100 (weighted 10%)
+  transaction: number; // 0-100 (weighted 20%)
+  counterparty: number; // 0-100 (weighted 25%)
+  hop: number; // 0-100 (weighted 15%)
+  valueContinuity: number; // 0-100 (weighted 20%) — value dilution across path
+  fanOut: number; // 0-100 (weighted 15%) — output count per intermediate tx
+  cexConfidence: number; // 0-100 (weighted 5%) — confirmed vs heuristic CEX
 }
 
 export type CexDirection = "outflow" | "inflow";

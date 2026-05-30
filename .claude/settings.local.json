@@ -13,7 +13,8 @@
       "Bash(wc -l \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/public/cex_addresses/\"*_addresses.csv)",
       "Bash(timeout 12 npx tsx -e ':*)",
       "Bash(ls -lt \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/\"*.log)",
-      "Bash(ls -lt \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/PYTHON/\"*.log)"
+      "Bash(ls -lt \"/Users/byron/Documents/Programming/NodeJS/BTC Tracer/PYTHON/\"*.log)",
+      "Bash(npm run:*)"
     ]
   }
 }

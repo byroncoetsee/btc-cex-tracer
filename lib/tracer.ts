@@ -55,10 +55,10 @@ function pick<T>(rng: () => number, arr: T[]): T {
 }
 
 function strengthFromScore(score: number): LinkStrength {
-  if (score < 15) return "VERY STRONG";
-  if (score < 30) return "STRONG";
-  if (score < 50) return "MODERATE";
-  if (score < 70) return "WEAK";
+  if (score < 20) return "VERY STRONG";
+  if (score < 35) return "STRONG";
+  if (score < 55) return "MODERATE";
+  if (score < 75) return "WEAK";
   return "VERY WEAK";
 }
 
@@ -79,25 +79,41 @@ const DERIVATION_PATHS = [
 
 function buildLink(rng: () => number, exchange: string): CexLink {
   const hops = 1 + Math.floor(rng() * 4); // 1..4
+  const isConfirmedCex = rng() < 0.7;
 
   // obscurity components 0-100
   const transaction = Math.floor(rng() * 100);
   const counterparty = Math.floor(rng() * 100);
-  const hop = Math.min(100, hops * 22 + Math.floor(rng() * 12));
+  const hop = Math.min(100, hops * 10 + Math.floor(rng() * 12));
+  const valueContinuity = Math.floor(rng() * 100);
+  const fanOut = Math.floor(rng() * 80);
+  const cexConfidence = isConfirmedCex ? 0 : 70;
 
-  const score = Math.round(transaction * 0.4 + counterparty * 0.5 + hop * 0.1);
+  const baseScore =
+    transaction * 0.20 +
+    counterparty * 0.25 +
+    hop * 0.15 +
+    valueContinuity * 0.20 +
+    fanOut * 0.15 +
+    cexConfidence * 0.05;
+  const compoundFactor = 1 + 0.08 * Math.max(0, hops - 1);
+  const score = Math.min(100, Math.round(baseScore * compoundFactor));
 
   const path: IntermediateWallet[] = [];
   for (let i = 0; i < hops - 1; i++) {
     const txCount = 1 + Math.floor(rng() * 60);
     const counterparties = 1 + Math.floor(rng() * Math.min(txCount, 80));
     const isPossibleCex = txCount >= 30 && rng() < 0.4;
+    const valuePassthrough = 0.1 + rng() * 0.9;
+    const outputCount = 2 + Math.floor(rng() * 8);
     path.push({
       address: makeAddress(rng),
       txCount,
       uniqueCounterparties: counterparties,
       directness: directnessLabel(txCount, counterparties),
       isPossibleCex,
+      valuePassthrough,
+      outputCount,
     });
   }
   // final node = the CEX
@@ -106,7 +122,7 @@ function buildLink(rng: () => number, exchange: string): CexLink {
     address: makeAddress(rng),
     txCount: cexTx,
     uniqueCounterparties: 2000 + Math.floor(rng() * 50000),
-    directness: `${exchange} hot wallet — confirmed CEX`,
+    directness: isConfirmedCex ? `${exchange} hot wallet — confirmed CEX` : `${exchange} — possible CEX`,
     isPossibleCex: true,
   });
 
@@ -118,7 +134,7 @@ function buildLink(rng: () => number, exchange: string): CexLink {
     direction: rng() < 0.8 ? "outflow" : "inflow",
     score,
     strength: strengthFromScore(score),
-    breakdown: { transaction, counterparty, hop },
+    breakdown: { transaction, counterparty, hop, valueContinuity, fanOut, cexConfidence },
     path,
   };
 }

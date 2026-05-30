@@ -71,6 +71,9 @@ export function PathGraph({ sourceAddress, link }: PathGraphProps) {
                 <span className="text-[10px] text-muted-foreground">
                   {n.wallet.txCount.toLocaleString()} tx ·{" "}
                   {n.wallet.uniqueCounterparties.toLocaleString()} cp
+                  {n.wallet.valuePassthrough != null && (
+                    <> · {(n.wallet.valuePassthrough * 100).toFixed(0)}% fwd</>
+                  )}
                 </span>
               )}
             </div>

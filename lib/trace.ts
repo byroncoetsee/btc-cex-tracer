@@ -28,9 +28,16 @@ interface VerboseTx {
   }[];
 }
 
+interface HopDetail {
+  inputValue: number; // total BTC the sender put into this tx
+  outputValue: number; // BTC received by the next hop address
+  outputCount: number; // number of outputs in the connecting tx
+}
+
 interface AddressInfo {
   historyLength: number;
   parentAddr: string | null;
+  hopDetail?: HopDetail; // the hop that led TO this address
 }
 
 export type ProgressFn = (msg: string) => void;
@@ -39,9 +46,15 @@ export type ProgressFn = (msg: string) => void;
 // Scoring
 // ---------------------------------------------------------------------------
 
-const TX_OBSC_W = 0.4;
-const CP_OBSC_W = 0.5;
-const HOP_OBSC_W = 0.1;
+const TX_OBSC_W = 0.20;
+const CP_OBSC_W = 0.25;
+const HOP_OBSC_W = 0.15;
+const VAL_OBSC_W = 0.20;
+const FAN_OBSC_W = 0.15;
+const CEX_CONF_W = 0.05;
+
+/** Compound multiplier per hop beyond the first — inflates obscurity non-linearly. */
+const HOP_COMPOUND_RATE = 0.08;
 
 function calcTxObscurity(intermediates: AddressInfo[]): number {
   if (intermediates.length === 0) return 0;
@@ -53,23 +66,53 @@ function calcTxObscurity(intermediates: AddressInfo[]): number {
 
 function calcHopObscurity(hops: number): number {
   if (hops <= 1) return 0;
-  if (hops >= 5) return 1;
-  return (hops - 1) / 4;
+  if (hops >= 10) return 1;
+  return (hops - 1) / 9;
 }
 
 function calcCpObscurity(intermediates: AddressInfo[]): number {
   if (intermediates.length === 0) return 0;
   const avg = intermediates.reduce((s, a) => s + a.historyLength, 0) / intermediates.length;
   if (avg <= 1) return 0;
-  if (avg >= 10) return 1;
-  return (avg - 1) / 9;
+  if (avg >= 75) return 1;
+  return (avg - 1) / 74;
+}
+
+/** Value dilution across the path — compounds ratios per hop. */
+function calcValueContinuity(hopDetails: (HopDetail | undefined)[]): number {
+  const valid = hopDetails.filter((h): h is HopDetail => !!h && h.inputValue > 0);
+  if (valid.length === 0) return 0;
+  let compounded = 1;
+  for (const hop of valid) {
+    const ratio = Math.min(1, hop.outputValue / hop.inputValue);
+    compounded *= ratio;
+  }
+  // compounded ≈ 1 means value preserved (traceable, low obscurity)
+  // compounded ≈ 0 means value diluted (hard to trace, high obscurity)
+  return Math.min(1, Math.max(0, 1 - compounded));
+}
+
+/** Fan-out: average output count per hop, log-scaled. */
+function calcFanOut(hopDetails: (HopDetail | undefined)[]): number {
+  const valid = hopDetails.filter((h): h is HopDetail => !!h);
+  if (valid.length === 0) return 0;
+  const avgOutputs = valid.reduce((s, h) => s + h.outputCount, 0) / valid.length;
+  if (avgOutputs <= 2) return 0;
+  if (avgOutputs >= 50) return 1;
+  // log2(avgOutputs/2) / log2(25) maps [2,50] → [0,1]
+  return Math.min(1, Math.max(0, Math.log2(avgOutputs / 2) / Math.log2(25)));
+}
+
+/** CEX confirmation confidence — speculative links score higher obscurity. */
+function calcCexConfidence(flag: "CEX" | "possible CEX"): number {
+  return flag === "CEX" ? 0 : 0.7;
 }
 
 function strengthFromScore(score: number): LinkStrength {
-  if (score < 15) return "VERY STRONG";
-  if (score < 30) return "STRONG";
-  if (score < 50) return "MODERATE";
-  if (score < 70) return "WEAK";
+  if (score < 20) return "VERY STRONG";
+  if (score < 35) return "STRONG";
+  if (score < 55) return "MODERATE";
+  if (score < 75) return "WEAK";
   return "VERY WEAK";
 }
 
@@ -96,15 +139,6 @@ function cachedScripthash(addr: string): string {
   return sh;
 }
 
-function extractOutputAddresses(tx: VerboseTx): string[] {
-  const addrs: string[] = [];
-  for (const vout of tx.vout) {
-    const a = vout.scriptPubKey?.address;
-    if (a) addrs.push(a);
-  }
-  return addrs;
-}
-
 function reconstructPath(parentMap: Map<string, string | null>, source: string, target: string): string[] {
   const path: string[] = [];
   let current: string | null | undefined = target;
@@ -129,19 +163,39 @@ function buildCexLink(
   const hops = pathAddrs.length - 1;
   const intermediateInfos = pathAddrs.slice(1, -1).map((a) => addrInfo.get(a) ?? { historyLength: 0, parentAddr: null });
 
+  // Collect hop details for value continuity and fan-out (all hops including CEX)
+  const hopDetails = pathAddrs.slice(1).map((a) => addrInfo.get(a)?.hopDetail);
+
   const txObs = calcTxObscurity(intermediateInfos) * 100;
   const cpObs = calcCpObscurity(intermediateInfos) * 100;
   const hopObs = calcHopObscurity(hops) * 100;
-  const score = Math.round(txObs * TX_OBSC_W + cpObs * CP_OBSC_W + hopObs * HOP_OBSC_W);
+  const valObs = calcValueContinuity(hopDetails) * 100;
+  const fanObs = calcFanOut(hopDetails) * 100;
+  const cexObs = calcCexConfidence(flag) * 100;
+
+  const baseScore =
+    txObs * TX_OBSC_W +
+    cpObs * CP_OBSC_W +
+    hopObs * HOP_OBSC_W +
+    valObs * VAL_OBSC_W +
+    fanObs * FAN_OBSC_W +
+    cexObs * CEX_CONF_W;
+
+  const compoundFactor = 1 + HOP_COMPOUND_RATE * Math.max(0, hops - 1);
+  const score = Math.min(100, Math.round(baseScore * compoundFactor));
 
   const pathWallets: IntermediateWallet[] = pathAddrs.slice(1).map((addr) => {
-    const histLen = addrInfo.get(addr)?.historyLength ?? 0;
+    const info = addrInfo.get(addr);
+    const histLen = info?.historyLength ?? 0;
+    const hop = info?.hopDetail;
     return {
       address: addr,
       txCount: histLen,
       uniqueCounterparties: histLen,
       directness: flag === "CEX" && addr === pathAddrs[pathAddrs.length - 1] ? `${exchange} — confirmed CEX` : directnessLabel(histLen),
       isPossibleCex: isPossibleCex(histLen),
+      valuePassthrough: hop && hop.inputValue > 0 ? Math.min(1, hop.outputValue / hop.inputValue) : undefined,
+      outputCount: hop?.outputCount,
     };
   });
 
@@ -157,6 +211,9 @@ function buildCexLink(
       transaction: Math.round(txObs),
       counterparty: Math.round(cpObs),
       hop: Math.round(hopObs),
+      valueContinuity: Math.round(valObs),
+      fanOut: Math.round(fanObs),
+      cexConfidence: Math.round(cexObs),
     },
     path: pathWallets,
   };
@@ -174,9 +231,10 @@ function recordCex(
   visited: Set<string>,
   histLen = 0,
   direction: CexDirection = "outflow",
+  hopDetail?: HopDetail,
 ) {
   parentMap.set(addr, parent);
-  addrInfo.set(addr, { historyLength: histLen, parentAddr: parent });
+  addrInfo.set(addr, { historyLength: histLen, parentAddr: parent, hopDetail });
   visited.add(addr);
   const path = reconstructPath(parentMap, sourceAddr, addr);
   links.push(buildCexLink(path, addrInfo, exchange, flag, direction));
@@ -322,7 +380,7 @@ async function traceSource(
     }
 
     // --- Step 4: classify each tx and extract CEX links + candidates ---
-    const allCandidates = new Map<string, string>(); // candidate addr → parent addr
+    const allCandidates = new Map<string, { parent: string; hopDetail?: HopDetail }>(); // candidate addr → parent + hop data
 
     for (const { addr, txHashes } of toProcess) {
       const txs = txHashes.map((h) => txCache.get(h)).filter(Boolean) as VerboseTx[];
@@ -338,20 +396,39 @@ async function traceSource(
         }
 
         const addrIsSender = inputAddrs.has(addr);
-        const outputAddrs = extractOutputAddresses(tx);
 
         if (addrIsSender) {
+          // Compute total input value this address contributed to the tx
+          let addrInputValue = 0;
+          for (const vin of tx.vin) {
+            if (!vin.txid) continue;
+            const prevTx = txCache.get(vin.txid);
+            const prevOut = prevTx?.vout[vin.vout];
+            if (prevOut?.scriptPubKey?.address === addr) {
+              addrInputValue += prevOut.value;
+            }
+          }
+          const outputCount = tx.vout.length;
+
           // addr sent funds — check outputs for CEX (outflow) and candidates
-          for (const outAddr of outputAddrs) {
-            if (outAddr === addr || visited.has(outAddr)) continue;
+          for (const vout of tx.vout) {
+            const outAddr = vout.scriptPubKey?.address;
+            if (!outAddr || outAddr === addr || visited.has(outAddr)) continue;
+
+            const hopDetail: HopDetail = {
+              inputValue: addrInputValue,
+              outputValue: vout.value,
+              outputCount,
+            };
+
             const exch = checkCex(outAddr, cexDb);
             if (exch) {
-              recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "outflow");
+              recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "outflow", hopDetail);
               onProgress(
                 `    CEX FOUND (outflow): ${exch} — ${outAddr.slice(0, 12)}… (${reconstructPath(parentMap, sourceAddr, outAddr).length - 1} hops)`,
               );
             } else if (!allCandidates.has(outAddr)) {
-              allCandidates.set(outAddr, addr);
+              allCandidates.set(outAddr, { parent: addr, hopDetail });
             }
           }
         } else {
@@ -372,7 +449,7 @@ async function traceSource(
     const nextLevel: string[] = [];
 
     if (depth < maxDepth && allCandidates.size > 0) {
-      const candidates = [...allCandidates.entries()]; // [addr, parent]
+      const candidates = [...allCandidates.entries()]; // [addr, { parent, hopDetail }]
       const candHistResults = await session.batch(
         candidates.map(([a]) => ({
           method: "blockchain.scripthash.get_history",
@@ -381,14 +458,14 @@ async function traceSource(
       );
 
       for (let i = 0; i < candidates.length; i++) {
-        const [cAddr, cParent] = candidates[i];
+        const [cAddr, { parent: cParent, hopDetail: cHopDetail }] = candidates[i];
         const hLen = ((candHistResults[i]?.result ?? []) as unknown[]).length;
 
-        addrInfo.set(cAddr, { historyLength: hLen, parentAddr: cParent });
+        addrInfo.set(cAddr, { historyLength: hLen, parentAddr: cParent, hopDetail: cHopDetail });
 
         if (isPossibleCex(hLen)) {
           parentMap.set(cAddr, cParent);
-          recordCex(cAddr, cParent, "Unknown (high activity)", "possible CEX", sourceAddr, parentMap, addrInfo, links, visited, hLen);
+          recordCex(cAddr, cParent, "Unknown (high activity)", "possible CEX", sourceAddr, parentMap, addrInfo, links, visited, hLen, "outflow", cHopDetail);
           onProgress(`    possible CEX (${hLen} txs): ${cAddr.slice(0, 12)}…`);
         } else if (hLen > 0 && hLen < FOLLOW_THRESHOLD && nextLevel.length < MAX_CANDIDATES_PER_LEVEL) {
           parentMap.set(cAddr, cParent);
