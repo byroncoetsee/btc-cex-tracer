@@ -134,6 +134,7 @@ function buildLink(rng: () => number, exchange: string): CexLink {
     exchange,
     exchangeAddress: path[path.length - 1].address,
     hops,
+    effectiveHops: Math.max(1, hops - (rng() < 0.3 ? Math.floor(rng() * 2) + 1 : 0)),
     direction: rng() < 0.8 ? "outflow" : "inflow",
     score,
     strength: strengthFromScore(score),
@@ -188,6 +189,19 @@ export function runTrace(input: ScanInput): TraceResult {
     return sa - sb;
   });
 
+  // Mock CIOH clusters — randomly link some source addresses
+  const ownershipClusters: string[][] = [];
+  const unclustered = sources.filter((s) => s.txCount > 1).map((s) => s.address);
+  while (unclustered.length >= 2 && rng() < 0.4) {
+    const size = 2 + Math.floor(rng() * Math.min(3, unclustered.length - 1));
+    const cluster: string[] = [];
+    for (let i = 0; i < size && unclustered.length > 0; i++) {
+      const idx = Math.floor(rng() * unclustered.length);
+      cluster.push(unclustered.splice(idx, 1)[0]);
+    }
+    if (cluster.length >= 2) ownershipClusters.push(cluster);
+  }
+
   return {
     id: `${seed.toString(16)}-${Date.now().toString(36)}`,
     label: input.label,
@@ -197,6 +211,7 @@ export function runTrace(input: ScanInput): TraceResult {
     durationMs: 800 + Math.floor(rng() * 3500),
     addressesScanned,
     sources,
+    ownershipClusters,
   };
 }
 

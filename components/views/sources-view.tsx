@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, Circle, Copy, Check } from "lucide-react"
 import { riskLabel } from "@/lib/aggregates"
+import { clusterColor } from "@/components/views/dashboard-view"
 import { truncateAddr } from "@/lib/tracer"
 import type { SourceAddress, TraceResult } from "@/lib/types"
 import { LinkCard } from "@/components/link-card"
@@ -13,7 +14,7 @@ function toneText(tone: "danger" | "warn" | "ok" | "none") {
   return "text-primary"
 }
 
-function SourceRow({ source }: { source: SourceAddress }) {
+function SourceRow({ source, clusterIndex }: { source: SourceAddress; clusterIndex?: number }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const best = source.links.length ? source.links[0].score : null
@@ -71,6 +72,11 @@ function SourceRow({ source }: { source: SourceAddress }) {
           {source.links.length === 0 && (
             <span className="text-xs text-muted-foreground">0 CEX</span>
           )}
+          {clusterIndex != null && (
+            <span className={`rounded-sm ${clusterColor(clusterIndex).bg} px-1.5 py-0.5 text-[10px] uppercase tracking-widest ${clusterColor(clusterIndex).text}`}>
+              cluster {clusterIndex + 1}
+            </span>
+          )}
         </code>
 
         <span className="ml-auto hidden text-xs text-muted-foreground sm:block">
@@ -104,6 +110,12 @@ export function SourcesView({ trace }: { trace: TraceResult }) {
     return true
   })
 
+  // Build address → cluster index lookup
+  const clusterLookup = new Map<string, number>()
+  for (let i = 0; i < (trace.ownershipClusters?.length ?? 0); i++) {
+    for (const addr of trace.ownershipClusters[i]) clusterLookup.set(addr, i)
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-xs">
@@ -134,7 +146,7 @@ export function SourcesView({ trace }: { trace: TraceResult }) {
       </div>
 
       {sources.map((s) => (
-        <SourceRow key={s.address} source={s} />
+        <SourceRow key={s.address} source={s} clusterIndex={clusterLookup.get(s.address)} />
       ))}
     </div>
   )

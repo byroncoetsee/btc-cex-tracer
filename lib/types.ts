@@ -28,6 +28,8 @@ export interface CexLink {
   exchange: string;
   exchangeAddress: string;
   hops: number;
+  /** Effective hops after common-input-ownership clustering (same-entity hops collapsed). */
+  effectiveHops: number;
   /** outflow = funds sent toward the CEX; inflow = funds received from the CEX */
   direction: CexDirection;
   score: number; // 0-100, lower = stronger/more traceable
@@ -54,6 +56,8 @@ export interface TraceResult {
   durationMs: number;
   addressesScanned: number;
   sources: SourceAddress[];
+  /** Groups of source addresses linked by common-input-ownership (co-spending). */
+  ownershipClusters: string[][];
 }
 
 export interface ScanInput {

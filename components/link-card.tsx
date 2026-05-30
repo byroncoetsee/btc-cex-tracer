@@ -49,6 +49,9 @@ export function LinkCard({ sourceAddress, link }: LinkCardProps) {
           </span>
           <span className="text-xs text-muted-foreground">
             via {link.hops} hop{link.hops > 1 ? "s" : ""}
+            {link.effectiveHops < link.hops && (
+              <> ({link.effectiveHops} effective)</>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-3">

@@ -1,8 +1,24 @@
 "use client"
 
-import { Coins, Link2, Radar, ShieldAlert, Wallet } from "lucide-react"
+import { Coins, Fingerprint, Link2, Radar, ShieldAlert, Wallet } from "lucide-react"
 import { computeStats, riskLabel } from "@/lib/aggregates"
+import { truncateAddr } from "@/lib/tracer"
 import type { TraceResult } from "@/lib/types"
+
+const CLUSTER_COLORS = [
+  { bg: "bg-rose-500/15", text: "text-rose-400", border: "border-rose-500/40" },
+  { bg: "bg-sky-500/15", text: "text-sky-400", border: "border-sky-500/40" },
+  { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/40" },
+  { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/40" },
+  { bg: "bg-violet-500/15", text: "text-violet-400", border: "border-violet-500/40" },
+  { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/40" },
+  { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/40" },
+  { bg: "bg-pink-500/15", text: "text-pink-400", border: "border-pink-500/40" },
+]
+
+export function clusterColor(index: number) {
+  return CLUSTER_COLORS[index % CLUSTER_COLORS.length]
+}
 
 function toneClass(tone: "danger" | "warn" | "ok" | "none") {
   switch (tone) {
@@ -76,6 +92,38 @@ export function DashboardView({ trace }: { trace: TraceResult }) {
           </div>
         </div>
       </div>
+
+      {trace.ownershipClusters?.length > 0 && (
+        <div className="rounded-sm border border-accent/50 bg-accent/5 p-4">
+          <div className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-widest text-accent">
+            <Fingerprint className="size-3.5" /> common-input-ownership detected
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            These source addresses co-spent in the same transaction, proving they are controlled by
+            the same entity. An investigator can trivially link them.
+          </p>
+          <div className="space-y-2">
+            {trace.ownershipClusters.map((cluster, i) => {
+              const cc = clusterColor(i)
+              return (
+              <div
+                key={i}
+                className={`flex flex-wrap items-center gap-2 rounded-sm border ${cc.border} bg-background/50 px-3 py-2`}
+              >
+                <span className={`mr-1 text-[10px] uppercase tracking-widest ${cc.text}`}>
+                  cluster {i + 1}
+                </span>
+                {cluster.map((addr) => (
+                  <code key={addr} className="text-xs text-foreground">
+                    {truncateAddr(addr, 10, 8)}
+                  </code>
+                ))}
+              </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-sm border border-border bg-card/60 p-4">
         <div className="mb-3 flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground">

@@ -40,6 +40,45 @@ interface AddressInfo {
   hopDetail?: HopDetail; // the hop that led TO this address
 }
 
+/** Disjoint-set / Union-Find for common-input-ownership clustering. */
+class UnionFind {
+  private parent = new Map<string, string>();
+
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    let root = x;
+    while (this.parent.get(root) !== root) root = this.parent.get(root)!;
+    let cur = x;
+    while (cur !== root) {
+      const next = this.parent.get(cur)!;
+      this.parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  }
+
+  union(a: string, b: string) {
+    const ra = this.find(a), rb = this.find(b);
+    if (ra !== rb) this.parent.set(ra, rb);
+  }
+
+  same(a: string, b: string) {
+    return this.find(a) === this.find(b);
+  }
+}
+
+/** Max inputs before we skip CIOH — larger txs are likely CoinJoin. */
+const CIOH_MAX_INPUTS = 5;
+
+/** Count hops that cross entity boundaries (same-cluster hops = 0). */
+function calcEffectiveHops(path: string[], uf: UnionFind): number {
+  let effective = 0;
+  for (let i = 1; i < path.length; i++) {
+    if (!uf.same(path[i - 1], path[i])) effective++;
+  }
+  return effective;
+}
+
 export type ProgressFn = (msg: string) => void;
 
 // ---------------------------------------------------------------------------
@@ -162,8 +201,10 @@ function buildCexLink(
   exchange: string,
   flag: "CEX" | "possible CEX",
   direction: CexDirection,
+  uf: UnionFind,
 ): CexLink {
   const hops = pathAddrs.length - 1;
+  const effectiveHops = calcEffectiveHops(pathAddrs, uf);
   const intermediateInfos = pathAddrs.slice(1, -1).map((a) => addrInfo.get(a) ?? { historyLength: 0, parentAddr: null });
 
   // Collect hop details for value continuity and fan-out (all hops including CEX)
@@ -171,7 +212,7 @@ function buildCexLink(
 
   const txObs = calcTxObscurity(intermediateInfos) * 100;
   const cpObs = calcCpObscurity(intermediateInfos) * 100;
-  const hopObs = calcHopObscurity(hops) * 100;
+  const hopObs = calcHopObscurity(effectiveHops) * 100;
   const valObs = calcValueContinuity(hopDetails) * 100;
   const fanObs = calcFanOut(hopDetails) * 100;
   const cexObs = calcCexConfidence(flag) * 100;
@@ -184,7 +225,8 @@ function buildCexLink(
     fanObs * FAN_OBSC_W +
     cexObs * CEX_CONF_W;
 
-  const compoundFactor = 1 + HOP_COMPOUND_RATE * Math.max(0, hops - 1);
+  // Compounding uses effective hops — same-entity shuffling doesn't add obscurity
+  const compoundFactor = 1 + HOP_COMPOUND_RATE * Math.max(0, effectiveHops - 1);
   const score = Math.min(100, Math.round(baseScore * compoundFactor));
 
   const pathWallets: IntermediateWallet[] = pathAddrs.slice(1).map((addr) => {
@@ -207,6 +249,7 @@ function buildCexLink(
     exchange,
     exchangeAddress: pathAddrs[pathAddrs.length - 1],
     hops,
+    effectiveHops,
     direction,
     score,
     strength: strengthFromScore(score),
@@ -232,6 +275,7 @@ function recordCex(
   addrInfo: Map<string, AddressInfo>,
   links: CexLink[],
   visited: Set<string>,
+  uf: UnionFind,
   histLen = 0,
   direction: CexDirection = "outflow",
   hopDetail?: HopDetail,
@@ -240,7 +284,7 @@ function recordCex(
   addrInfo.set(addr, { historyLength: histLen, parentAddr: parent, hopDetail });
   visited.add(addr);
   const path = reconstructPath(parentMap, sourceAddr, addr);
-  links.push(buildCexLink(path, addrInfo, exchange, flag, direction));
+  links.push(buildCexLink(path, addrInfo, exchange, flag, direction, uf));
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +304,7 @@ async function traceSource(
   const addrInfo = new Map<string, AddressInfo>();
   const visited = new Set<string>();
   const txCache = sharedTxCache;
+  const uf = new UnionFind();
 
   visited.add(sourceAddr);
   parentMap.set(sourceAddr, null);
@@ -300,6 +345,7 @@ async function traceSource(
             addrInfo,
             links,
             visited,
+            uf,
             999999,
           );
         } else {
@@ -323,6 +369,7 @@ async function traceSource(
           addrInfo,
           links,
           visited,
+          uf,
           history.length,
         );
         continue;
@@ -398,6 +445,12 @@ async function traceSource(
           if (inAddr) inputAddrs.add(inAddr);
         }
 
+        // CIOH: cluster co-spending input addresses (skip likely CoinJoins)
+        if (inputAddrs.size >= 2 && inputAddrs.size <= CIOH_MAX_INPUTS) {
+          const addrs = [...inputAddrs];
+          for (let j = 1; j < addrs.length; j++) uf.union(addrs[0], addrs[j]);
+        }
+
         const addrIsSender = inputAddrs.has(addr);
 
         if (addrIsSender) {
@@ -426,7 +479,7 @@ async function traceSource(
 
             const exch = checkCex(outAddr, cexDb);
             if (exch) {
-              recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "outflow", hopDetail);
+              recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, uf, 0, "outflow", hopDetail);
               onProgress(
                 `    CEX FOUND (outflow): ${exch} — ${outAddr.slice(0, 12)}… (${reconstructPath(parentMap, sourceAddr, outAddr).length - 1} hops)`,
               );
@@ -440,7 +493,7 @@ async function traceSource(
             if (inAddr === addr || visited.has(inAddr)) continue;
             const exch = checkCex(inAddr, cexDb);
             if (exch) {
-              recordCex(inAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "inflow");
+              recordCex(inAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, uf, 0, "inflow");
               onProgress(`    CEX FOUND (inflow): ${exch} — ${inAddr.slice(0, 12)}… sent to you`);
             }
           }
@@ -468,7 +521,7 @@ async function traceSource(
 
         if (isPossibleCex(hLen)) {
           parentMap.set(cAddr, cParent);
-          recordCex(cAddr, cParent, "Unknown (high activity)", "possible CEX", sourceAddr, parentMap, addrInfo, links, visited, hLen, "outflow", cHopDetail);
+          recordCex(cAddr, cParent, "Unknown (high activity)", "possible CEX", sourceAddr, parentMap, addrInfo, links, visited, uf, hLen, "outflow", cHopDetail);
           onProgress(`    possible CEX (${hLen} txs): ${cAddr.slice(0, 12)}…`);
         } else if (hLen > 0 && hLen < FOLLOW_THRESHOLD && nextLevel.length < MAX_CANDIDATES_PER_LEVEL) {
           parentMap.set(cAddr, cParent);
@@ -568,11 +621,40 @@ export async function runRealTrace(
     return sa - sb;
   });
 
+  // --- Global CIOH: cluster source addresses that co-spent in any tx ---
+  const sourceSet = new Set(sources.map((s) => s.address));
+  const globalUf = new UnionFind();
+  for (const tx of sharedTxCache.values()) {
+    const inputAddrs: string[] = [];
+    for (const vin of tx.vin) {
+      if (!vin.txid) continue;
+      const prevTx = sharedTxCache.get(vin.txid);
+      const addr = prevTx?.vout[vin.vout]?.scriptPubKey?.address;
+      if (addr && sourceSet.has(addr)) inputAddrs.push(addr);
+    }
+    // Only cluster when <= CIOH_MAX_INPUTS total inputs (CoinJoin guard)
+    if (inputAddrs.length >= 2 && tx.vin.length <= CIOH_MAX_INPUTS) {
+      for (let i = 1; i < inputAddrs.length; i++) globalUf.union(inputAddrs[0], inputAddrs[i]);
+    }
+  }
+  // Build cluster groups (only groups with 2+ members)
+  const clusterMap = new Map<string, string[]>();
+  for (const addr of sourceSet) {
+    const root = globalUf.find(addr);
+    const group = clusterMap.get(root) || [];
+    group.push(addr);
+    clusterMap.set(root, group);
+  }
+  const ownershipClusters = [...clusterMap.values()].filter((g) => g.length >= 2);
+
   const totalLinks = resultSources.reduce((s, src) => s + src.links.length, 0);
   const durationMs = Date.now() - startTime;
   onProgress(
     `> TRACE COMPLETE · ${totalScanned} addresses scanned · ${totalLinks} CEX link${totalLinks !== 1 ? "s" : ""} · ${(durationMs / 1000).toFixed(1)}s`,
   );
+  if (ownershipClusters.length > 0) {
+    onProgress(`> CIOH: ${ownershipClusters.length} ownership cluster${ownershipClusters.length > 1 ? "s" : ""} detected among source addresses`);
+  }
 
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
@@ -583,5 +665,6 @@ export async function runRealTrace(
     durationMs,
     addressesScanned: totalScanned,
     sources: resultSources,
+    ownershipClusters,
   };
 }
