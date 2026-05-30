@@ -58,6 +58,19 @@ function SourceRow({ source }: { source: SourceAddress }) {
           >
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           </span>
+          {source.links.filter((l) => l.direction === "inflow").length > 0 && (
+            <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-accent">
+              {source.links.filter((l) => l.direction === "inflow").length} in
+            </span>
+          )}
+          {source.links.filter((l) => l.direction === "outflow").length > 0 && (
+            <span className="rounded-sm bg-destructive/15 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-destructive">
+              {source.links.filter((l) => l.direction === "outflow").length} out
+            </span>
+          )}
+          {source.links.length === 0 && (
+            <span className="text-xs text-muted-foreground">0 CEX</span>
+          )}
         </code>
 
         <span className="ml-auto hidden text-xs text-muted-foreground sm:block">
@@ -65,9 +78,6 @@ function SourceRow({ source }: { source: SourceAddress }) {
         </span>
         <span className="w-24 text-right text-xs text-foreground">
           {source.balanceBtc.toFixed(4)} BTC
-        </span>
-        <span className="w-20 text-right text-xs text-muted-foreground">
-          {source.links.length} CEX
         </span>
         <span className={`w-20 text-right text-xs font-bold ${toneText(risk.tone)}`}>
           {risk.label}
