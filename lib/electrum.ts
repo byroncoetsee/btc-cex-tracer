@@ -346,6 +346,32 @@ export class ElectrumPool {
     this.scheduleReconnect(idx);
   }
 
+  /**
+   * Attempt to immediately reconnect all unhealthy sessions.
+   * Returns once at least one reconnects, or all attempts fail.
+   */
+  private async tryImmediateReconnect(): Promise<void> {
+    const unhealthy = this.healthy
+      .map((h, i) => (h ? -1 : i))
+      .filter((i) => i >= 0);
+    if (unhealthy.length === 0) return;
+
+    const results = await Promise.allSettled(
+      unhealthy.map(async (idx) => {
+        const s = new ElectrumSession(this.host, this.port, this.timeoutMs, this.useTls);
+        await s.connect();
+        this.sessions[idx]?.close();
+        this.sessions[idx] = s;
+        this.healthy[idx] = true;
+      }),
+    );
+
+    // if none recovered, that's fine — caller will get the "no healthy" error
+    if (!results.some((r) => r.status === "fulfilled")) {
+      throw new Error(`No healthy connections (${this.healthyCount}/${this.size} up)`);
+    }
+  }
+
   /** Pick the next healthy session round-robin. */
   private pick(): { session: ElectrumSession; idx: number } {
     const count = this.size;
@@ -361,7 +387,14 @@ export class ElectrumPool {
 
   /** Send a single RPC call on any healthy connection. */
   async call(method: string, params: unknown[] = []): Promise<ElectrumResponse> {
-    const { session, idx } = this.pick();
+    let picked: { session: ElectrumSession; idx: number };
+    try {
+      picked = this.pick();
+    } catch {
+      await this.tryImmediateReconnect();
+      picked = this.pick();
+    }
+    const { session, idx } = picked;
     try {
       return await session.call(method, params);
     } catch (err) {
@@ -386,12 +419,20 @@ export class ElectrumPool {
   async batch(calls: { method: string; params: unknown[] }[]): Promise<ElectrumResponse[]> {
     if (calls.length === 0) return [];
 
-    const healthyIdxs = this.healthy
+    let healthyIdxs = this.healthy
       .map((h, i) => (h ? i : -1))
       .filter((i) => i >= 0);
 
     if (healthyIdxs.length === 0) {
-      throw new Error(`No healthy connections (0/${this.size} up)`);
+      await this.tryImmediateReconnect();
+      // re-check after reconnect attempt
+      const recovered = this.healthy
+        .map((h, i) => (h ? i : -1))
+        .filter((i) => i >= 0);
+      if (recovered.length === 0) {
+        throw new Error(`No healthy connections (0/${this.size} up)`);
+      }
+      healthyIdxs.push(...recovered);
     }
 
     // distribute calls round-robin across healthy sessions
@@ -441,15 +482,21 @@ export class ElectrumPool {
     }
 
     // retry failed calls on any healthy connection
-    if (retries.length > 0 && this.healthyCount > 0) {
-      try {
-        const { session } = this.pick();
-        const retryResults = await session.batch(retries);
-        for (let i = 0; i < retryIndices.length; i++) {
-          results[retryIndices[i]] = retryResults[i];
+    if (retries.length > 0) {
+      let retried = false;
+      if (this.healthyCount > 0) {
+        try {
+          const { session } = this.pick();
+          const retryResults = await session.batch(retries);
+          for (let i = 0; i < retryIndices.length; i++) {
+            results[retryIndices[i]] = retryResults[i];
+          }
+          retried = true;
+        } catch {
+          // fall through to error fill
         }
-      } catch {
-        // fill remaining with error responses
+      }
+      if (!retried) {
         for (const idx of retryIndices) {
           if (!results[idx]) {
             results[idx] = {
@@ -459,6 +506,17 @@ export class ElectrumPool {
             };
           }
         }
+      }
+    }
+
+    // safety net: fill any remaining undefined slots
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i]) {
+        results[i] = {
+          jsonrpc: "2.0",
+          id: 0,
+          error: { code: -1, message: "No response received" },
+        };
       }
     }
 

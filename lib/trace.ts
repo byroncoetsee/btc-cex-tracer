@@ -222,6 +222,7 @@ async function traceSource(
     for (let i = 0; i < currentLevel.length; i++) {
       const addr = currentLevel[i];
       const res = histResults[i];
+      if (!res) continue;
 
       // Fulcrum returns error when history exceeds max_history (125k)
       if (res.error) {
@@ -290,7 +291,7 @@ async function traceSource(
         })),
       );
       for (let i = 0; i < hashes.length; i++) {
-        if (txResults[i].result) txCache.set(hashes[i], txResults[i].result as VerboseTx);
+        if (txResults[i]?.result) txCache.set(hashes[i], txResults[i].result as VerboseTx);
       }
     }
 
@@ -316,7 +317,7 @@ async function traceSource(
         })),
       );
       for (let i = 0; i < toFetch.length; i++) {
-        if (prevResults[i].result) txCache.set(toFetch[i], prevResults[i].result as VerboseTx);
+        if (prevResults[i]?.result) txCache.set(toFetch[i], prevResults[i].result as VerboseTx);
       }
     }
 
@@ -381,7 +382,7 @@ async function traceSource(
 
       for (let i = 0; i < candidates.length; i++) {
         const [cAddr, cParent] = candidates[i];
-        const hLen = ((candHistResults[i].result ?? []) as unknown[]).length;
+        const hLen = ((candHistResults[i]?.result ?? []) as unknown[]).length;
 
         addrInfo.set(cAddr, { historyLength: hLen, parentAddr: cParent });
 
