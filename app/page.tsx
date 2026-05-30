@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Building2,
+  Download,
   LayoutDashboard,
   ListTree,
   History,
@@ -33,6 +34,16 @@ function formatTime(ts: number) {
     hour: "2-digit",
     minute: "2-digit",
   })
+}
+
+function exportToJson(data: TraceResult | TraceResult[], filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export default function Page() {
@@ -105,6 +116,13 @@ export default function Page() {
             <span className="ml-auto text-muted-foreground">
               depth {active.depth} · {formatTime(active.scannedAt)}
             </span>
+            <button
+              onClick={() => exportToJson(active, `trace-${active.label.slice(0, 20)}-${active.id}.json`)}
+              className="ml-2 flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 uppercase tracking-widest text-muted-foreground hover:border-primary hover:text-primary"
+              aria-label="export trace as JSON"
+            >
+              <Download className="size-3" /> export
+            </button>
           </div>
         )}
 
@@ -205,12 +223,20 @@ function HistoryView({
         <span className="text-muted-foreground">
           {traces.length} saved trace{traces.length > 1 ? "s" : ""} (persisted locally)
         </span>
-        <button
-          onClick={onClear}
-          className="flex items-center gap-1.5 rounded-sm border border-destructive/50 px-2 py-1 uppercase tracking-widest text-destructive hover:bg-destructive/10"
-        >
-          <Trash2 className="size-3.5" /> clear all
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportToJson(traces, `traces-all-${Date.now()}.json`)}
+            className="flex items-center gap-1.5 rounded-sm border border-border px-2 py-1 uppercase tracking-widest text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <Download className="size-3.5" /> export all
+          </button>
+          <button
+            onClick={onClear}
+            className="flex items-center gap-1.5 rounded-sm border border-destructive/50 px-2 py-1 uppercase tracking-widest text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="size-3.5" /> clear all
+          </button>
+        </div>
       </div>
       {traces.map((t) => {
         const linked = t.sources.filter((s) => s.links.length > 0).length
@@ -235,6 +261,13 @@ function HistoryView({
               <span className="w-32 text-right text-xs text-muted-foreground">
                 {formatTime(t.scannedAt)}
               </span>
+            </button>
+            <button
+              onClick={() => exportToJson(t, `trace-${t.label.slice(0, 20)}-${t.id}.json`)}
+              className="text-muted-foreground hover:text-primary"
+              aria-label="export trace as JSON"
+            >
+              <Download className="size-3.5" />
             </button>
             <button
               onClick={() => onRemove(t.id)}
