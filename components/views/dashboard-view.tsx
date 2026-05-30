@@ -105,19 +105,46 @@ export function DashboardView({ trace }: { trace: TraceResult }) {
           <div className="space-y-2">
             {trace.ownershipClusters.map((cluster, i) => {
               const cc = clusterColor(i)
+              const clusterSources = trace.sources.filter((s) => cluster.includes(s.address))
+              const totalBtc = clusterSources.reduce((s, src) => s + src.balanceBtc, 0)
+              const allLinks = clusterSources.flatMap((s) => s.links)
+              const bestLink = allLinks.length > 0
+                ? allLinks.reduce((best, l) => (l.score < best.score ? l : best))
+                : null
               return (
               <div
                 key={i}
-                className={`flex flex-wrap items-center gap-2 rounded-sm border ${cc.border} bg-background/50 px-3 py-2`}
+                className={`rounded-sm border ${cc.border} bg-background/50 px-3 py-2`}
               >
-                <span className={`mr-1 text-[10px] uppercase tracking-widest ${cc.text}`}>
-                  cluster {i + 1}
-                </span>
-                {cluster.map((addr) => (
-                  <code key={addr} className="text-xs text-foreground">
-                    {truncateAddr(addr, 10, 8)}
-                  </code>
-                ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`mr-1 text-[10px] uppercase tracking-widest ${cc.text}`}>
+                    cluster {i + 1}
+                  </span>
+                  {cluster.map((addr) => (
+                    <code key={addr} className="text-xs text-foreground">
+                      {truncateAddr(addr, 10, 8)}
+                    </code>
+                  ))}
+                </div>
+                <div className="mt-1.5 flex items-center gap-4 text-[11px] text-muted-foreground">
+                  <span>{totalBtc.toFixed(4)} BTC</span>
+                  <span>{clusterSources.length} address{clusterSources.length !== 1 ? "es" : ""}</span>
+                  {bestLink ? (
+                    <>
+                      <span>
+                        closest CEX: <span className="text-destructive">{bestLink.exchange}</span> · {bestLink.hops} hop{bestLink.hops !== 1 ? "s" : ""}
+                        {bestLink.effectiveHops < bestLink.hops && (
+                          <> ({bestLink.effectiveHops} eff)</>
+                        )}
+                      </span>
+                      <span>
+                        obscurity <span className="text-foreground">{bestLink.score}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <span>no CEX links</span>
+                  )}
+                </div>
               </div>
               )
             })}
