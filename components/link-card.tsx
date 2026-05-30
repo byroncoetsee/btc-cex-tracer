@@ -38,6 +38,15 @@ export function LinkCard({ sourceAddress, link }: LinkCardProps) {
           <span className="text-sm font-bold uppercase tracking-widest text-destructive">
             {link.exchange}
           </span>
+          <span
+            className={`rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-widest ${
+              link.direction === "inflow"
+                ? "bg-accent/15 text-accent"
+                : "bg-destructive/15 text-destructive"
+            }`}
+          >
+            {link.direction === "inflow" ? "received from" : "sent to"}
+          </span>
           <span className="text-xs text-muted-foreground">
             via {link.hops} hop{link.hops > 1 ? "s" : ""}
           </span>

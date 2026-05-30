@@ -10,6 +10,8 @@ interface PathGraphProps {
 }
 
 export function PathGraph({ sourceAddress, link }: PathGraphProps) {
+  const isInflow = link.direction === "inflow"
+
   const nodes = [
     { addr: sourceAddress, kind: "source" as const, label: "YOUR ADDRESS" },
     ...link.path.map((p, i) => ({
@@ -20,10 +22,18 @@ export function PathGraph({ sourceAddress, link }: PathGraphProps) {
     })),
   ]
 
+  // for inflows, reverse the order: CEX → hops → YOUR ADDRESS
+  const displayNodes = isInflow ? [...nodes].reverse() : nodes
+  // arrow always points in direction of fund flow
+  const Arrow = ArrowRight
+
   return (
     <div className="overflow-x-auto">
+      <div className="mb-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+        {isInflow ? "received from" : "sent to"}
+      </div>
       <div className="flex min-w-max items-stretch gap-2 py-2">
-        {nodes.map((n, i) => (
+        {displayNodes.map((n, i) => (
           <div key={i} className="flex items-center gap-2">
             <div
               className={`flex w-40 flex-col gap-1 rounded-sm border p-2.5 ${
@@ -64,8 +74,8 @@ export function PathGraph({ sourceAddress, link }: PathGraphProps) {
                 </span>
               )}
             </div>
-            {i < nodes.length - 1 && (
-              <ArrowRight className="size-4 shrink-0 text-primary/60" aria-hidden="true" />
+            {i < displayNodes.length - 1 && (
+              <Arrow className="size-4 shrink-0 text-primary/60" aria-hidden="true" />
             )}
           </div>
         ))}
