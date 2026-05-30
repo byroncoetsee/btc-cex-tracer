@@ -168,12 +168,13 @@ export function ScanConsole({
     abortRef.current = null;
   }
 
-  // extract funded addresses from lookup results for tracing
-  const fundedSources = useMemo(() => {
+  // extract all used addresses from lookup results for tracing
+  // includes zero-balance addresses — they may have sent funds (outflows)
+  const traceSources = useMemo(() => {
     if (!lookupGroups) return [];
     return lookupGroups.flatMap((g) =>
       g.results
-        .filter((r) => !r.error && r.confirmed > 0)
+        .filter((r) => !r.error)
         .map((r) => ({
           address: r.address,
           derivationPath: r.path ?? "direct",
@@ -183,7 +184,7 @@ export function ScanConsole({
     );
   }, [lookupGroups]);
 
-  const canTrace = nodeAddress.trim().length > 0 && fundedSources.length > 0 && !running && !looking;
+  const canTrace = nodeAddress.trim().length > 0 && traceSources.length > 0 && !running && !looking;
 
   async function handleRun() {
     if (!canTrace) return;
@@ -199,7 +200,7 @@ export function ScanConsole({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nodeAddress: nodeAddress.trim(),
-          sources: fundedSources,
+          sources: traceSources,
           depth,
           tls: useTls,
         }),
@@ -485,11 +486,11 @@ export function ScanConsole({
             onClick={handleRun}
             disabled={!canTrace}
             variant="outline"
-            title={!fundedSources.length ? "run a lookup first to discover funded addresses" : undefined}
+            title={!traceSources.length ? "run a lookup first to discover funded addresses" : undefined}
             className="h-9 gap-1.5 border-primary/50 bg-transparent font-bold uppercase tracking-widest text-primary hover:bg-primary/10"
           >
             <Play className="size-4" />
-            {fundedSources.length ? `trace${fundedSources.length > 1 ? ` · ${fundedSources.length} addr` : ""}` : "trace"}
+            {traceSources.length ? `trace${traceSources.length > 1 ? ` · ${traceSources.length} addr` : ""}` : "trace"}
           </Button>
         )}
 

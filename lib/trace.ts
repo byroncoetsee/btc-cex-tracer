@@ -294,88 +294,74 @@ async function traceSource(
       }
     }
 
-    // --- Step 3: extract output addresses, check CEX, collect candidates ---
-    // Only follow outputs for txs where addr is a SENDER (not a recipient).
-    // If addr appears in the tx outputs, it received funds — the other outputs
-    // are co-recipients from the same sender, not addresses we sent to.
+    // --- Step 3: resolve inputs so we can determine sender vs recipient ---
+    // Collect all prev txids we need to resolve input addresses
+    const prevTxidsNeeded = new Set<string>();
+    for (const { txHashes } of toProcess) {
+      const txs = txHashes.map((h) => txCache.get(h)).filter(Boolean) as VerboseTx[];
+      for (const tx of txs) {
+        for (const vin of tx.vin) {
+          if (vin.txid && !txCache.has(vin.txid)) prevTxidsNeeded.add(vin.txid);
+        }
+      }
+    }
+
+    if (prevTxidsNeeded.size > 0) {
+      const toFetch = [...prevTxidsNeeded].slice(0, 200);
+      onProgress(`  depth ${depth}: resolving ${toFetch.length} input txs`);
+      const prevResults = await session.batch(
+        toFetch.map((txid) => ({
+          method: "blockchain.transaction.get",
+          params: [txid, true],
+        })),
+      );
+      for (let i = 0; i < toFetch.length; i++) {
+        if (prevResults[i].result) txCache.set(toFetch[i], prevResults[i].result as VerboseTx);
+      }
+    }
+
+    // --- Step 4: classify each tx and extract CEX links + candidates ---
     const allCandidates = new Map<string, string>(); // candidate addr → parent addr
 
     for (const { addr, txHashes } of toProcess) {
       const txs = txHashes.map((h) => txCache.get(h)).filter(Boolean) as VerboseTx[];
 
       for (const tx of txs) {
-        const outputAddrs = extractOutputAddresses(tx);
-        const addrIsRecipient = outputAddrs.includes(addr);
-
-        if (addrIsRecipient) {
-          // addr received funds in this tx — other outputs are irrelevant
-          // (they're co-outputs from the same sender, e.g. change addresses)
-          continue;
-        }
-
-        // addr is a sender — follow outputs (forward trace)
-        for (const outAddr of outputAddrs) {
-          if (outAddr === addr || visited.has(outAddr)) continue;
-
-          const exch = checkCex(outAddr, cexDb);
-          if (exch) {
-            recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "outflow");
-            onProgress(
-              `    CEX FOUND (outflow): ${exch} — ${outAddr.slice(0, 12)}… (${reconstructPath(parentMap, sourceAddr, outAddr).length - 1} hops)`,
-            );
-          } else if (!allCandidates.has(outAddr)) {
-            allCandidates.set(outAddr, addr); // track parent
-          }
-        }
-      }
-    }
-
-    // --- Step 4: depth 0 only — resolve inputs of INBOUND txs for CEX detection ---
-    // Only check inputs for txs where our address is a recipient (inflow detection).
-    // "Who sent funds to me? Was it a CEX?"
-    if (depth === 0) {
-      const inboundTxs: { addr: string; tx: VerboseTx }[] = [];
-      for (const { addr, txHashes } of toProcess) {
-        const txs = txHashes.map((h) => txCache.get(h)).filter(Boolean) as VerboseTx[];
-        for (const tx of txs) {
-          if (extractOutputAddresses(tx).includes(addr)) {
-            inboundTxs.push({ addr, tx });
-          }
-        }
-      }
-
-      // batch fetch prev txs needed to resolve input addresses
-      const inputTxids = new Set<string>();
-      for (const { tx } of inboundTxs) {
-        for (const vin of tx.vin) {
-          if (vin.txid && !txCache.has(vin.txid)) inputTxids.add(vin.txid);
-        }
-      }
-
-      const inputFetch = [...inputTxids].slice(0, 100);
-      if (inputFetch.length > 0) {
-        onProgress(`  depth 0: resolving ${inputFetch.length} input txs for inflow detection`);
-        const prevResults = await session.batch(
-          inputFetch.map((txid) => ({
-            method: "blockchain.transaction.get",
-            params: [txid, true],
-          })),
-        );
-        for (let i = 0; i < inputFetch.length; i++) {
-          if (prevResults[i].result) txCache.set(inputFetch[i], prevResults[i].result as VerboseTx);
-        }
-      }
-
-      for (const { addr, tx } of inboundTxs) {
+        // resolve actual input addresses for this tx
+        const inputAddrs = new Set<string>();
         for (const vin of tx.vin) {
           if (!vin.txid) continue;
           const prevTx = txCache.get(vin.txid);
           const inAddr = prevTx?.vout[vin.vout]?.scriptPubKey?.address;
-          if (!inAddr || inAddr === addr || visited.has(inAddr)) continue;
-          const exch = checkCex(inAddr, cexDb);
-          if (exch) {
-            recordCex(inAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "inflow");
-            onProgress(`    CEX FOUND (inflow): ${exch} — ${inAddr.slice(0, 12)}… sent to you`);
+          if (inAddr) inputAddrs.add(inAddr);
+        }
+
+        const addrIsSender = inputAddrs.has(addr);
+        const outputAddrs = extractOutputAddresses(tx);
+
+        if (addrIsSender) {
+          // addr sent funds — check outputs for CEX (outflow) and candidates
+          for (const outAddr of outputAddrs) {
+            if (outAddr === addr || visited.has(outAddr)) continue;
+            const exch = checkCex(outAddr, cexDb);
+            if (exch) {
+              recordCex(outAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "outflow");
+              onProgress(
+                `    CEX FOUND (outflow): ${exch} — ${outAddr.slice(0, 12)}… (${reconstructPath(parentMap, sourceAddr, outAddr).length - 1} hops)`,
+              );
+            } else if (!allCandidates.has(outAddr)) {
+              allCandidates.set(outAddr, addr);
+            }
+          }
+        } else {
+          // addr received funds — check inputs for CEX (inflow)
+          for (const inAddr of inputAddrs) {
+            if (inAddr === addr || visited.has(inAddr)) continue;
+            const exch = checkCex(inAddr, cexDb);
+            if (exch) {
+              recordCex(inAddr, addr, exch, "CEX", sourceAddr, parentMap, addrInfo, links, visited, 0, "inflow");
+              onProgress(`    CEX FOUND (inflow): ${exch} — ${inAddr.slice(0, 12)}… sent to you`);
+            }
           }
         }
       }
