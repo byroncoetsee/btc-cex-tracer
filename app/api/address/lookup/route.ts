@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { ElectrumSession, parseNodeAddress } from "@/lib/electrum"
+import { ElectrumPool, parseNodeAddress } from "@/lib/electrum"
 import { addressToScripthash } from "@/lib/address"
 import { toHDKey, deriveAddressBatch, SCHEMES, type DerivedAddress } from "@/lib/xpub"
 
@@ -36,7 +36,7 @@ function isXpub(value: string): boolean {
  */
 async function lookupXpub(
   extKey: string,
-  session: ElectrumSession,
+  session: ElectrumPool,
 ): Promise<LookupGroup> {
   const group: LookupGroup = {
     input: extKey,
@@ -102,46 +102,47 @@ async function lookupXpub(
       schemeStates.push(state)
     }
 
-    // Phase 2: continue discovery only for schemes that had hits and haven't
-    // reached gap limit yet
-    for (const state of schemeStates) {
-      if (!state.needsMore) continue
+    // Phase 2: continue discovery for active schemes — all in parallel
+    await Promise.all(
+      schemeStates
+        .filter((s) => s.needsMore)
+        .map(async (state) => {
+          let startIndex = GAP_LIMIT
+          while (state.consecutiveEmpty < GAP_LIMIT) {
+            const batch = deriveAddressBatch(
+              hdkey,
+              state.scheme.type,
+              state.scheme.label,
+              startIndex,
+              GAP_LIMIT,
+            )
+            const receive = batch.filter((a) => !a.change)
+            group.derivedCount! += receive.length
 
-      let startIndex = GAP_LIMIT
-      while (state.consecutiveEmpty < GAP_LIMIT) {
-        const batch = deriveAddressBatch(
-          hdkey,
-          state.scheme.type,
-          state.scheme.label,
-          startIndex,
-          GAP_LIMIT,
-        )
-        const receive = batch.filter((a) => !a.change)
-        group.derivedCount! += receive.length
+            const historyResults = await session.batch(
+              receive.map((a) => ({
+                method: "blockchain.scripthash.get_history",
+                params: [addressToScripthash(a.address)],
+              })),
+            )
 
-        const historyResults = await session.batch(
-          receive.map((a) => ({
-            method: "blockchain.scripthash.get_history",
-            params: [addressToScripthash(a.address)],
-          })),
-        )
-
-        let batchHadActivity = false
-        for (let i = 0; i < receive.length; i++) {
-          const res = historyResults[i]
-          const history = (res.result ?? []) as unknown[]
-          if (history.length > 0) {
-            state.used.push(receive[i])
-            batchHadActivity = true
-            state.consecutiveEmpty = 0
-          } else {
-            state.consecutiveEmpty++
+            let batchHadActivity = false
+            for (let i = 0; i < receive.length; i++) {
+              const res = historyResults[i]
+              const history = (res.result ?? []) as unknown[]
+              if (history.length > 0) {
+                state.used.push(receive[i])
+                batchHadActivity = true
+                state.consecutiveEmpty = 0
+              } else {
+                state.consecutiveEmpty++
+              }
+            }
+            if (!batchHadActivity) break
+            startIndex += GAP_LIMIT
           }
-        }
-        if (!batchHadActivity) break
-        startIndex += GAP_LIMIT
-      }
-    }
+        }),
+    )
 
     // Phase 3: fetch balances for all used addresses across all schemes in one batch
     const allUsed = schemeStates.flatMap((s) => s.used)
@@ -220,16 +221,20 @@ export async function POST(req: Request) {
 
     const { host, port } = parseNodeAddress(nodeAddress)
 
-    // single shared session for everything
-    const session = new ElectrumSession(host, port, 30000, useTls ?? false)
+    // connection pool for max throughput
+    const session = new ElectrumPool(host, port, 30000, useTls ?? false)
     await session.connect()
 
     try {
       const groups: LookupGroup[] = []
 
-      // xpubs — sequential on shared session
-      for (const entry of entries.filter((e) => isXpub(e.value))) {
-        groups.push(await lookupXpub(entry.value, session))
+      // xpubs — all in parallel, pool distributes across connections
+      const xpubEntries = entries.filter((e) => isXpub(e.value))
+      if (xpubEntries.length) {
+        const xpubResults = await Promise.all(
+          xpubEntries.map((entry) => lookupXpub(entry.value, session)),
+        )
+        groups.push(...xpubResults)
       }
 
       // plain addresses — one pipelined batch
