@@ -96,29 +96,38 @@ function SourceRow({ source }: { source: SourceAddress }) {
 }
 
 export function SourcesView({ trace }: { trace: TraceResult }) {
-  const [filter, setFilter] = useState<"all" | "linked">("all")
-  const sources =
-    filter === "linked"
-      ? trace.sources.filter((s) => s.links.length > 0)
-      : trace.sources
+  const [hideZero, setHideZero] = useState(false)
+  const [linkedOnly, setLinkedOnly] = useState(false)
+  const sources = trace.sources.filter((s) => {
+    if (hideZero && s.balanceBtc <= 0) return false
+    if (linkedOnly && s.links.length === 0) return false
+    return true
+  })
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 text-xs">
         <span className="text-muted-foreground">FILTER:</span>
-        {(["all", "linked"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-sm border px-2.5 py-1 uppercase tracking-widest ${
-              filter === f
-                ? "border-primary bg-primary/15 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {f === "all" ? "all addresses" : "cex-linked only"}
-          </button>
-        ))}
+        <button
+          onClick={() => setHideZero((v) => !v)}
+          className={`rounded-sm border px-2.5 py-1 uppercase tracking-widest ${
+            hideZero
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          non-zero balance
+        </button>
+        <button
+          onClick={() => setLinkedOnly((v) => !v)}
+          className={`rounded-sm border px-2.5 py-1 uppercase tracking-widest ${
+            linkedOnly
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          cex-linked only
+        </button>
         <span className="ml-auto text-muted-foreground">
           {sources.length} shown · click a linked row to expand
         </span>

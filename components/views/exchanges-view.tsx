@@ -7,7 +7,7 @@ import type { TraceResult } from "@/lib/types"
 
 interface ExchangeGroup {
   name: string
-  links: { source: string; hops: number; score: number; cexAddress: string }[]
+  links: { source: string; hops: number; score: number; cexAddress: string; direction: "inflow" | "outflow" }[]
 }
 
 function buildGroups(trace: TraceResult): ExchangeGroup[] {
@@ -20,6 +20,7 @@ function buildGroups(trace: TraceResult): ExchangeGroup[] {
         hops: l.hops,
         score: l.score,
         cexAddress: l.exchangeAddress,
+        direction: l.direction,
       })
       map.set(l.exchange, g)
     }
@@ -69,9 +70,19 @@ export function ExchangesView({ trace }: { trace: TraceResult }) {
                   key={i}
                   className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-xs"
                 >
-                  <code className="text-foreground">{truncateAddr(l.source, 12, 8)}</code>
-                  <span className="text-muted-foreground/60">→</span>
-                  <code className="text-destructive/80">{truncateAddr(l.cexAddress, 10, 6)}</code>
+                  {l.direction === "outflow" ? (
+                    <>
+                      <code className="text-foreground">{truncateAddr(l.source, 12, 8)}</code>
+                      <span className="text-muted-foreground/60">→</span>
+                      <code className="text-destructive/80">{truncateAddr(l.cexAddress, 10, 6)}</code>
+                    </>
+                  ) : (
+                    <>
+                      <code className="text-destructive/80">{truncateAddr(l.cexAddress, 10, 6)}</code>
+                      <span className="text-muted-foreground/60">→</span>
+                      <code className="text-foreground">{truncateAddr(l.source, 12, 8)}</code>
+                    </>
+                  )}
                   <span className="ml-auto text-muted-foreground">{l.hops} hops</span>
                   <span className="w-24 text-right text-foreground">obscurity {l.score}</span>
                 </div>
