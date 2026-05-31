@@ -299,7 +299,7 @@ async function traceSource(
   onProgress: ProgressFn,
   sharedTxCache: Map<string, VerboseTx>,
   allSourceAddrs: Set<string>,
-): Promise<{ links: CexLink[]; scanned: number; transfers: InternalTransfer[] }> {
+): Promise<{ links: CexLink[]; scanned: number; transfers: InternalTransfer[]; historyLength: number }> {
   const links: CexLink[] = [];
   const internalTransfers: InternalTransfer[] = [];
   const seenTransferKeys = new Set<string>();
@@ -580,7 +580,8 @@ async function traceSource(
   }
 
   links.sort((a, b) => a.score - b.score);
-  return { links, scanned: visited.size, transfers: internalTransfers };
+  const historyLength = addrInfo.get(sourceAddr)?.historyLength ?? 0;
+  return { links, scanned: visited.size, transfers: internalTransfers, historyLength };
 }
 
 // ---------------------------------------------------------------------------
@@ -616,7 +617,7 @@ export async function runRealTrace(
   const sharedTxCache = new Map<string, VerboseTx>();
   const sourceSet = new Set(sources.map((s) => s.address));
 
-  const sourceResults: PromiseSettledResult<{ src: TraceSourceInput; links: CexLink[]; scanned: number; transfers: InternalTransfer[] }>[] = [];
+  const sourceResults: PromiseSettledResult<{ src: TraceSourceInput; links: CexLink[]; scanned: number; transfers: InternalTransfer[]; historyLength: number }>[] = [];
 
   for (let idx = 0; idx < sources.length; idx++) {
     const src = sources[idx];
@@ -641,7 +642,7 @@ export async function runRealTrace(
         address: src.address,
         derivationPath: src.derivationPath,
         balanceBtc: src.balanceBtc,
-        txCount: src.txCount,
+        txCount: res.value.historyLength || src.txCount,
         links: res.value.links,
       });
     } else {

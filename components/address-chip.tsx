@@ -4,7 +4,9 @@ import { useState } from "react"
 import { Copy, Check } from "lucide-react"
 import { truncateAddr } from "@/lib/tracer"
 import { getAddressIdentity } from "@/lib/address-identity"
-import { useSettingsContext, useHoveredAddress } from "@/components/settings-provider"
+import { useSettingsContext, useHoveredAddress, useActiveTrace } from "@/components/settings-provider"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { AddressPopoverContent } from "@/components/address-popover"
 
 interface AddressChipProps {
   address: string
@@ -58,12 +60,14 @@ export function AddressChip({
   const identity = getAddressIdentity(address)
   const { showIdenticons, showNicknames } = useSettingsContext()
   const [hoveredAddr, setHoveredAddr] = useHoveredAddress()
+  const trace = useActiveTrace()
   const isHighlighted = hoveredAddr === address
   const isSomethingHovered = hoveredAddr !== null
   const isDimmed = isSomethingHovered && !isHighlighted
 
   async function copy(e: React.MouseEvent) {
     if (stopPropagation) e.stopPropagation()
+    e.preventDefault()
     try {
       await navigator.clipboard.writeText(address)
       setCopied(true)
@@ -73,9 +77,9 @@ export function AddressChip({
     }
   }
 
-  return (
+  const chip = (
     <span
-      className={`inline-flex items-center gap-1.5 transition-all duration-150 ${className} ${
+      className={`inline-flex cursor-pointer items-center gap-1.5 transition-all duration-150 ${className} ${
         isHighlighted
           ? "rounded-sm ring-1 ring-current/40 bg-white/[0.06]"
           : isDimmed
@@ -110,6 +114,25 @@ export function AddressChip({
         </span>
       )}
     </span>
+  )
+
+  if (!trace) return chip
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild onClick={(e) => { if (stopPropagation) e.stopPropagation() }}>
+        {chip}
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-96 max-h-[70vh] overflow-y-auto border-border bg-card p-4"
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <AddressPopoverContent address={address} trace={trace} />
+      </PopoverContent>
+    </Popover>
   )
 }
 

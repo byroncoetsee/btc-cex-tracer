@@ -25,7 +25,7 @@ import { SourcesView } from "@/components/views/sources-view"
 import { ExchangesView } from "@/components/views/exchanges-view"
 import { ConnectionsView } from "@/components/views/connections-view"
 import { SettingsView } from "@/components/views/settings-view"
-import { SettingsContext, HoverContext, createHoverStore } from "@/components/settings-provider"
+import { SettingsContext, HoverContext, TraceContext, createHoverStore } from "@/components/settings-provider"
 
 type View = "dashboard" | "sources" | "exchanges" | "connections" | "history" | "settings"
 
@@ -109,6 +109,7 @@ export default function Page() {
   return (
     <SettingsContext.Provider value={settings}>
     <HoverContext.Provider value={hoverStore}>
+    <TraceContext.Provider value={active}>
     <div className="min-h-screen">
       <TerminalHeader
         nodeAddress={nodeAddress}
@@ -219,6 +220,7 @@ export default function Page() {
         </footer>
       </main>
     </div>
+    </TraceContext.Provider>
     </HoverContext.Provider>
     </SettingsContext.Provider>
   )

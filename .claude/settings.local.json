@@ -23,7 +23,8 @@
       "Bash(ls -1 lib/*.ts)",
       "Bash(wc -l lib/*.ts)",
       "Bash(mkdir -p data)",
-      "Bash(mv public/cex_addresses data/cex_addresses)"
+      "Bash(mv public/cex_addresses data/cex_addresses)",
+      "Bash(ls \"/Users/byron/Downloads/\"*trace*)"
     ]
   }
 }

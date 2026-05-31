@@ -1,7 +1,8 @@
 "use client"
 
-import { createContext, useCallback, useContext, useRef, useSyncExternalStore } from "react"
+import { createContext, useCallback, useContext, useSyncExternalStore } from "react"
 import type { Settings } from "@/hooks/use-settings"
+import type { TraceResult } from "@/lib/types"
 
 // --- Settings context ---
 
@@ -42,6 +43,15 @@ const HoverContext = createContext<HoverStore | null>(null)
 
 export { createHoverStore, HoverContext }
 export type { HoverStore }
+
+// --- Active trace context ---
+// Provides the currently active trace to any component that needs it (e.g. AddressPopover).
+
+export const TraceContext = createContext<TraceResult | null>(null)
+
+export function useActiveTrace() {
+  return useContext(TraceContext)
+}
 
 export function useHoveredAddress(): [string | null, (addr: string | null) => void] {
   const store = useContext(HoverContext)
