@@ -16,3 +16,5 @@ node_modules
 
 PYTHON/
 trace-logs/
+data/cex_addresses/*
+!data/cex_addresses/example_addresses.csv
