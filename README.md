@@ -43,15 +43,23 @@ npm install
 
 ### CEX address databases
 
-The tracer relies on CSV files in `public/cex_addresses/` to identify known exchange addresses. These are large files (some over 100MB) and are **not included in this repo** — you'll need to source or generate your own.
+The tracer matches on-chain addresses against known exchange addresses stored as CSV files in `data/cex_addresses/`. These are **not included in the repo** — you bring your own.
 
-Expected format: one address per line (or CSV with address as the first column). Files should be named `<exchange>_addresses.csv`, e.g.:
+An example file (`example_addresses.csv`) is included to show the expected format. To add your own:
 
+1. Place CSV files in `data/cex_addresses/` with the naming pattern `<exchange>_addresses.csv`
+2. The exchange name is derived from the filename — `coinbase_addresses.csv` becomes **Coinbase**, `kraken_addresses.csv` becomes **Kraken**, etc.
+3. Restart the app — files are detected and loaded automatically on the first trace
+
+**Format:** one address per line, or CSV with the address as the first column. Lines starting with `#` and common headers are skipped.
+
+```csv
+# coinbase_addresses.csv
+1FzWLkAahHooV3kzTgyx6qsXoRDrBsrXU1
+1GR9qNz7zgtaW5HwwVpEJWMnGWhsbsieCG
 ```
-binance_addresses.csv
-kraken_addresses.csv
-luno_addresses.csv
-```
+
+The tracer works without any CEX data — traces will still run and map transaction flows, they just won't identify exchange endpoints. The more comprehensive your address databases, the better the results.
 
 ### Running
 
