@@ -2,8 +2,8 @@
 
 import { Building2 } from "lucide-react"
 import { riskLabel } from "@/lib/aggregates"
-import { truncateAddr } from "@/lib/tracer"
 import type { TraceResult } from "@/lib/types"
+import { AddressChip } from "@/components/address-chip"
 
 interface ExchangeGroup {
   name: string
@@ -72,15 +72,15 @@ export function ExchangesView({ trace }: { trace: TraceResult }) {
                 >
                   {l.direction === "outflow" ? (
                     <>
-                      <code className="text-foreground">{truncateAddr(l.source, 12, 8)}</code>
+                      <AddressChip address={l.source} head={12} tail={8} />
                       <span className="text-muted-foreground/60">→</span>
-                      <code className="text-destructive/80">{truncateAddr(l.cexAddress, 10, 6)}</code>
+                      <AddressChip address={l.cexAddress} head={10} tail={6} showNickname={false} />
                     </>
                   ) : (
                     <>
-                      <code className="text-destructive/80">{truncateAddr(l.cexAddress, 10, 6)}</code>
+                      <AddressChip address={l.cexAddress} head={10} tail={6} showNickname={false} />
                       <span className="text-muted-foreground/60">→</span>
-                      <code className="text-foreground">{truncateAddr(l.source, 12, 8)}</code>
+                      <AddressChip address={l.source} head={12} tail={8} />
                     </>
                   )}
                   <span className="ml-auto text-muted-foreground">{l.hops} hops</span>

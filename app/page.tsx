@@ -8,11 +8,13 @@ import {
   LayoutDashboard,
   ListTree,
   History,
+  Settings,
   Trash2,
   X,
 } from "lucide-react"
 import { useTracerStore } from "@/hooks/use-tracer-store"
 import { useNetworkLive } from "@/hooks/use-network-live"
+import { useSettings } from "@/hooks/use-settings"
 import type { TraceResult } from "@/lib/types"
 import { TerminalHeader } from "@/components/terminal-header"
 import { ScanConsole } from "@/components/scan-console"
@@ -20,8 +22,10 @@ import { DashboardView } from "@/components/views/dashboard-view"
 import { SourcesView } from "@/components/views/sources-view"
 import { ExchangesView } from "@/components/views/exchanges-view"
 import { ConnectionsView } from "@/components/views/connections-view"
+import { SettingsView } from "@/components/views/settings-view"
+import { SettingsContext } from "@/components/settings-provider"
 
-type View = "dashboard" | "sources" | "exchanges" | "connections" | "history"
+type View = "dashboard" | "sources" | "exchanges" | "connections" | "history" | "settings"
 
 const TABS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "dashboard", icon: LayoutDashboard },
@@ -29,6 +33,7 @@ const TABS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "exchanges", label: "exchanges", icon: Building2 },
   { id: "connections", label: "connections", icon: GitFork },
   { id: "history", label: "history", icon: History },
+  { id: "settings", label: "settings", icon: Settings },
 ]
 
 function formatTime(ts: number) {
@@ -70,6 +75,8 @@ export default function Page() {
   const [nodeOnline, setNodeOnline] = useState(false)
   const [useTls, setUseTls] = useState(false)
 
+  const { settings, update: updateSettings } = useSettings()
+
   const { status: networkStatus, connected: liveConnected, connecting: liveConnecting } = useNetworkLive(nodeAddress, nodeOnline, useTls)
 
   // keep selection valid; default to newest trace
@@ -97,6 +104,7 @@ export default function Page() {
   }
 
   return (
+    <SettingsContext.Provider value={settings}>
     <div className="min-h-screen">
       <TerminalHeader
         nodeAddress={nodeAddress}
@@ -170,6 +178,8 @@ export default function Page() {
           <p className="py-16 text-center text-sm text-muted-foreground">
             <span className="caret">█</span> loading local session…
           </p>
+        ) : view === "settings" ? (
+          <SettingsView settings={settings} onUpdate={updateSettings} />
         ) : view === "history" ? (
           <HistoryView
             traces={traces}
@@ -198,6 +208,7 @@ export default function Page() {
         </footer>
       </main>
     </div>
+    </SettingsContext.Provider>
   )
 }
 

@@ -5,6 +5,9 @@ import { ArrowRight, Fingerprint, GitFork } from "lucide-react"
 import { truncateAddr } from "@/lib/tracer"
 import { riskLabel } from "@/lib/aggregates"
 import { clusterColor } from "@/components/views/dashboard-view"
+import { AddressChip, SvgIdenticon } from "@/components/address-chip"
+import { getAddressIdentity } from "@/lib/address-identity"
+import { useSettingsContext } from "@/components/settings-provider"
 import type { TraceResult, SourceAddress } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -177,6 +180,7 @@ function buildGraph(trace: TraceResult) {
 function ConnectionGraph({ trace }: { trace: TraceResult }) {
   const { nodes, edges, addrIndex } = useMemo(() => buildGraph(trace), [trace])
   const [hovered, setHovered] = useState<string | null>(null)
+  const { showIdenticons, showNicknames } = useSettingsContext()
 
   if (nodes.length === 0) return null
 
@@ -391,17 +395,20 @@ function ConnectionGraph({ trace }: { trace: TraceResult }) {
                 stroke={fill}
                 strokeWidth={1.5}
               />
-              {/* Address label */}
+              {/* Identicon + Address label */}
+              <SvgIdenticon address={n.id} x={n.x - 6} y={n.y - r - (showIdenticons ? 20 : 6)} size={12} />
               <text
                 x={n.x}
                 y={n.y - r - 6}
                 textAnchor="middle"
-                fill="#e2e8f0"
+                fill={showIdenticons || showNicknames ? getAddressIdentity(n.id).colorHex : "#e2e8f0"}
                 fontSize={8}
                 fontFamily="monospace"
               >
-                {n.label}
+                {showNicknames ? getAddressIdentity(n.id).nickname : n.label}
               </text>
+              {/* Full address on hover via invisible rect */}
+              <title>{n.id}</title>
               {/* Balance inside node */}
               {n.balance > 0 && (
                 <text
@@ -535,7 +542,7 @@ export function ConnectionsView({ trace }: { trace: TraceResult }) {
                         c{fromCluster + 1}
                       </span>
                     )}
-                    <code className="text-xs text-foreground">{truncateAddr(t.from, 10, 8)}</code>
+                    <AddressChip address={t.from} head={10} tail={8} showNickname />
                     <span className={`text-[10px] font-bold ${toneText(fromRisk.tone)}`}>
                       {fromRisk.label}
                     </span>
@@ -555,7 +562,7 @@ export function ConnectionsView({ trace }: { trace: TraceResult }) {
                         c{toCluster + 1}
                       </span>
                     )}
-                    <code className="text-xs text-foreground">{truncateAddr(t.to, 10, 8)}</code>
+                    <AddressChip address={t.to} head={10} tail={8} showNickname />
                     <span className={`text-[10px] font-bold ${toneText(toRisk.tone)}`}>
                       {toRisk.label}
                     </span>
@@ -566,7 +573,7 @@ export function ConnectionsView({ trace }: { trace: TraceResult }) {
                       via {t.intermediates.map((a, j) => (
                         <span key={j}>
                           {j > 0 && " → "}
-                          <code>{truncateAddr(a, 6, 4)}</code>
+                          <AddressChip address={a} head={6} tail={4} showNickname={false} />
                         </span>
                       ))}
                     </div>
@@ -608,7 +615,7 @@ export function ConnectionsView({ trace }: { trace: TraceResult }) {
                       const src = sourceMap.get(addr)
                       return (
                         <span key={addr} className="flex items-center gap-1">
-                          <code className="text-xs text-foreground">{truncateAddr(addr, 10, 8)}</code>
+                          <AddressChip address={addr} head={10} tail={8} />
                           {src && src.balanceBtc > 0 && (
                             <span className="text-[10px] text-muted-foreground">
                               {src.balanceBtc.toFixed(4)}

@@ -1,9 +1,10 @@
 "use client"
 
 import { AlertTriangle, GitBranch } from "lucide-react"
-import { strengthColor, truncateAddr } from "@/lib/tracer"
+import { strengthColor } from "@/lib/tracer"
 import type { CexLink } from "@/lib/types"
 import { PathGraph } from "@/components/path-graph"
+import { AddressChip } from "@/components/address-chip"
 
 interface LinkCardProps {
   sourceAddress: string
@@ -91,7 +92,7 @@ export function LinkCard({ sourceAddress, link }: LinkCardProps) {
               key={i}
               className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border bg-background/50 px-3 py-2 text-xs"
             >
-              <code className="text-foreground">{truncateAddr(w.address, 12, 8)}</code>
+              <AddressChip address={w.address} head={12} tail={8} />
               <div className="flex items-center gap-4 text-muted-foreground">
                 <span>{w.txCount} tx</span>
                 <span>{w.uniqueCounterparties} cp</span>

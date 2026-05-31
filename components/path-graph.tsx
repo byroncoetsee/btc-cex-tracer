@@ -1,8 +1,8 @@
 "use client"
 
 import { ArrowRight, Building2, Home, Wallet } from "lucide-react"
-import { truncateAddr } from "@/lib/tracer"
 import type { CexLink } from "@/lib/types"
+import { AddressChip } from "@/components/address-chip"
 
 interface PathGraphProps {
   sourceAddress: string
@@ -64,9 +64,7 @@ export function PathGraph({ sourceAddress, link }: PathGraphProps) {
                   {n.label}
                 </span>
               </div>
-              <code className="break-all text-[11px] text-foreground">
-                {truncateAddr(n.addr, 10, 8)}
-              </code>
+              <AddressChip address={n.addr} head={10} tail={8} className="text-[11px]" />
               {"wallet" in n && n.wallet && (
                 <span className="text-[10px] text-muted-foreground">
                   {n.wallet.txCount.toLocaleString()} tx ·{" "}

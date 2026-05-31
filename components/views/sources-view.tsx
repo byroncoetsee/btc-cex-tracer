@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronRight, Circle, Copy, Check } from "lucide-react"
+import { ChevronDown, ChevronRight, Circle } from "lucide-react"
 import { riskLabel } from "@/lib/aggregates"
 import { clusterColor } from "@/components/views/dashboard-view"
-import { truncateAddr } from "@/lib/tracer"
 import type { SourceAddress, TraceResult } from "@/lib/types"
 import { LinkCard } from "@/components/link-card"
+import { AddressChip } from "@/components/address-chip"
 
 function toneText(tone: "danger" | "warn" | "ok" | "none") {
   if (tone === "danger") return "text-destructive"
@@ -16,20 +16,8 @@ function toneText(tone: "danger" | "warn" | "ok" | "none") {
 
 function SourceRow({ source, clusterIndex }: { source: SourceAddress; clusterIndex?: number }) {
   const [open, setOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
   const best = source.links.length ? source.links[0].score : null
   const risk = riskLabel(best)
-
-  async function copy(e: React.MouseEvent) {
-    e.stopPropagation()
-    try {
-      await navigator.clipboard.writeText(source.address)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1200)
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
 
   return (
     <div className="rounded-sm border border-border bg-card/60">
@@ -48,17 +36,8 @@ function SourceRow({ source, clusterIndex }: { source: SourceAddress; clusterInd
           <Circle className="size-3 shrink-0 text-muted-foreground/40" />
         )}
 
-        <code className="flex items-center gap-1.5 text-sm text-foreground">
-          {truncateAddr(source.address, 14, 10)}
-          <span
-            onClick={copy}
-            className="cursor-pointer text-muted-foreground hover:text-primary"
-            role="button"
-            tabIndex={0}
-            aria-label="copy address"
-          >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          </span>
+        <span className="flex items-center gap-1.5">
+          <AddressChip address={source.address} head={14} tail={10} copyable stopPropagation />
           {source.links.filter((l) => l.direction === "inflow").length > 0 && (
             <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-accent">
               {source.links.filter((l) => l.direction === "inflow").length} in
@@ -77,7 +56,7 @@ function SourceRow({ source, clusterIndex }: { source: SourceAddress; clusterInd
               cluster {clusterIndex + 1}
             </span>
           )}
-        </code>
+        </span>
 
         <span className="ml-auto hidden text-xs text-muted-foreground sm:block">
           {source.derivationPath}

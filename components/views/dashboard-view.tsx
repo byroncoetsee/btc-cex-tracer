@@ -2,8 +2,8 @@
 
 import { Coins, Fingerprint, Link2, Radar, ShieldAlert, Wallet } from "lucide-react"
 import { computeStats, riskLabel } from "@/lib/aggregates"
-import { truncateAddr } from "@/lib/tracer"
 import type { TraceResult } from "@/lib/types"
+import { AddressChip } from "@/components/address-chip"
 
 const CLUSTER_COLORS = [
   { bg: "bg-rose-500/15", text: "text-rose-400", border: "border-rose-500/40" },
@@ -121,9 +121,7 @@ export function DashboardView({ trace }: { trace: TraceResult }) {
                     cluster {i + 1}
                   </span>
                   {cluster.map((addr) => (
-                    <code key={addr} className="text-xs text-foreground">
-                      {truncateAddr(addr, 10, 8)}
-                    </code>
+                    <AddressChip key={addr} address={addr} head={10} tail={8} />
                   ))}
                 </div>
                 <div className="mt-1.5 flex items-center gap-4 text-[11px] text-muted-foreground">
