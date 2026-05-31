@@ -25,7 +25,8 @@
       "Bash(mkdir -p data)",
       "Bash(mv public/cex_addresses data/cex_addresses)",
       "Bash(ls \"/Users/byron/Downloads/\"*trace*)",
-      "Bash(npx pnpm:*)"
+      "Bash(npx pnpm:*)",
+      "Bash(ls node_modules/@noble/curves/secp256k1*)"
     ]
   }
 }

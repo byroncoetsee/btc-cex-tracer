@@ -14,6 +14,9 @@ importers:
       '@next/swc-darwin-arm64':
         specifier: ^16.2.6
         version: 16.2.6
+      '@noble/curves':
+        specifier: ^2.2.0
+        version: 2.2.0
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
