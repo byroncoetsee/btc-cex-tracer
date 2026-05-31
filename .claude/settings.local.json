@@ -19,7 +19,8 @@
       "Bash(curl -s -N --max-time 10 \"http://localhost:3000/api/network/live?node=localhost:50002&tls=1\")",
       "Bash(curl -s -N --max-time 10 \"http://localhost:3000/api/network/live?node=localhost:50002&tls=0\")",
       "Bash(curl -s -X POST \"http://localhost:3000/api/node/test\" -H \"Content-Type: application/json\" -d '{\"nodeAddress\":\"localhost:50002\",\"tls\":false}')",
-      "Bash(curl -s -X POST \"http://localhost:3000/api/node/test\" -H \"Content-Type: application/json\" -d '{\"nodeAddress\":\"localhost:50001\",\"tls\":false}')"
+      "Bash(curl -s -X POST \"http://localhost:3000/api/node/test\" -H \"Content-Type: application/json\" -d '{\"nodeAddress\":\"localhost:50001\",\"tls\":false}')",
+      "Bash(ls -1 lib/*.ts)"
     ]
   }
 }

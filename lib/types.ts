@@ -47,10 +47,16 @@ export interface SourceAddress {
 }
 
 export interface InternalTransfer {
+  /** Source address where the path originates */
   from: string;
+  /** Source address where the path terminates */
   to: string;
-  txid: string;
+  /** Number of hops (1 = direct transfer) */
+  hops: number;
+  /** BTC value received at the destination */
   valueBtc: number;
+  /** Intermediate addresses between from and to (excludes endpoints) */
+  intermediates: string[];
 }
 
 export interface TraceResult {

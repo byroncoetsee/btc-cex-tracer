@@ -298,8 +298,11 @@ async function traceSource(
   maxDepth: number,
   onProgress: ProgressFn,
   sharedTxCache: Map<string, VerboseTx>,
-): Promise<{ links: CexLink[]; scanned: number }> {
+  allSourceAddrs: Set<string>,
+): Promise<{ links: CexLink[]; scanned: number; transfers: InternalTransfer[] }> {
   const links: CexLink[] = [];
+  const internalTransfers: InternalTransfer[] = [];
+  const seenTransferKeys = new Set<string>();
   const parentMap = new Map<string, string | null>();
   const addrInfo = new Map<string, AddressInfo>();
   const visited = new Set<string>();
@@ -466,16 +469,37 @@ async function traceSource(
           }
           const outputCount = tx.vout.length;
 
-          // addr sent funds — check outputs for CEX (outflow) and candidates
+          // addr sent funds — check outputs for CEX (outflow), source links, and candidates
           for (const vout of tx.vout) {
             const outAddr = vout.scriptPubKey?.address;
-            if (!outAddr || outAddr === addr || visited.has(outAddr)) continue;
+            if (!outAddr || outAddr === addr) continue;
 
             const hopDetail: HopDetail = {
               inputValue: addrInputValue,
               outputValue: vout.value,
               outputCount,
             };
+
+            // Record link to another source address (direct or multi-hop)
+            if (allSourceAddrs.has(outAddr) && outAddr !== sourceAddr) {
+              parentMap.set(outAddr, addr);
+              addrInfo.set(outAddr, { historyLength: 0, parentAddr: addr, hopDetail });
+              const path = reconstructPath(parentMap, sourceAddr, outAddr);
+              const key = `${sourceAddr}:${outAddr}`;
+              if (!seenTransferKeys.has(key)) {
+                seenTransferKeys.add(key);
+                internalTransfers.push({
+                  from: sourceAddr,
+                  to: outAddr,
+                  hops: path.length - 1,
+                  valueBtc: vout.value,
+                  intermediates: path.slice(1, -1),
+                });
+                onProgress(`    SOURCE LINK: ${outAddr.slice(0, 12)}… (${path.length - 1} hops)`);
+              }
+            }
+
+            if (visited.has(outAddr)) continue;
 
             const exch = checkCex(outAddr, cexDb);
             if (exch) {
@@ -519,7 +543,23 @@ async function traceSource(
 
         addrInfo.set(cAddr, { historyLength: hLen, parentAddr: cParent, hopDetail: cHopDetail });
 
-        if (isPossibleCex(hLen)) {
+        // Check if candidate is another source address
+        if (allSourceAddrs.has(cAddr) && cAddr !== sourceAddr) {
+          parentMap.set(cAddr, cParent);
+          const path = reconstructPath(parentMap, sourceAddr, cAddr);
+          const key = `${sourceAddr}:${cAddr}`;
+          if (!seenTransferKeys.has(key)) {
+            seenTransferKeys.add(key);
+            internalTransfers.push({
+              from: sourceAddr,
+              to: cAddr,
+              hops: path.length - 1,
+              valueBtc: cHopDetail?.outputValue ?? 0,
+              intermediates: path.slice(1, -1),
+            });
+            onProgress(`    SOURCE LINK: ${cAddr.slice(0, 12)}… (${path.length - 1} hops)`);
+          }
+        } else if (isPossibleCex(hLen)) {
           parentMap.set(cAddr, cParent);
           recordCex(cAddr, cParent, "Unknown (high activity)", "possible CEX", sourceAddr, parentMap, addrInfo, links, visited, uf, hLen, "outflow", cHopDetail);
           onProgress(`    possible CEX (${hLen} txs): ${cAddr.slice(0, 12)}…`);
@@ -540,7 +580,7 @@ async function traceSource(
   }
 
   links.sort((a, b) => a.score - b.score);
-  return { links, scanned: visited.size };
+  return { links, scanned: visited.size, transfers: internalTransfers };
 }
 
 // ---------------------------------------------------------------------------
@@ -574,14 +614,15 @@ export async function runRealTrace(
 
   // shared tx cache across all sources
   const sharedTxCache = new Map<string, VerboseTx>();
+  const sourceSet = new Set(sources.map((s) => s.address));
 
-  const sourceResults: PromiseSettledResult<{ src: TraceSourceInput; links: CexLink[]; scanned: number }>[] = [];
+  const sourceResults: PromiseSettledResult<{ src: TraceSourceInput; links: CexLink[]; scanned: number; transfers: InternalTransfer[] }>[] = [];
 
   for (let idx = 0; idx < sources.length; idx++) {
     const src = sources[idx];
     try {
       onProgress(`> [${idx + 1}/${sources.length}] tracing ${src.address.slice(0, 16)}…`);
-      const result = await traceSource(src.address, session, cexDb, depth, onProgress, sharedTxCache);
+      const result = await traceSource(src.address, session, cexDb, depth, onProgress, sharedTxCache, sourceSet);
       sourceResults.push({ status: "fulfilled", value: { src, ...result } });
     } catch (reason) {
       sourceResults.push({ status: "rejected", reason });
@@ -622,7 +663,6 @@ export async function runRealTrace(
   });
 
   // --- Global CIOH: cluster source addresses that co-spent in any tx ---
-  const sourceSet = new Set(sources.map((s) => s.address));
   const globalUf = new UnionFind();
   for (const tx of sharedTxCache.values()) {
     const inputAddrs: string[] = [];
@@ -647,34 +687,16 @@ export async function runRealTrace(
   }
   const ownershipClusters = [...clusterMap.values()].filter((g) => g.length >= 2);
 
-  // --- Detect direct transfers between source addresses ---
+  // --- Collect internal transfers from per-source traces (deduped) ---
   const internalTransfers: InternalTransfer[] = [];
-  const seenTransfers = new Set<string>(); // dedup by "txid:from:to"
-  for (const tx of sharedTxCache.values()) {
-    // Resolve which source addresses are inputs (senders)
-    const senders = new Set<string>();
-    for (const vin of tx.vin) {
-      if (!vin.txid) continue;
-      const prevTx = sharedTxCache.get(vin.txid);
-      const addr = prevTx?.vout[vin.vout]?.scriptPubKey?.address;
-      if (addr && sourceSet.has(addr)) senders.add(addr);
-    }
-    if (senders.size === 0) continue;
-    // Check outputs for source addresses that are NOT the sender (received from another source)
-    for (const vout of tx.vout) {
-      const outAddr = vout.scriptPubKey?.address;
-      if (!outAddr || !sourceSet.has(outAddr)) continue;
-      for (const sender of senders) {
-        if (sender === outAddr) continue;
-        const key = `${tx.txid}:${sender}:${outAddr}`;
-        if (seenTransfers.has(key)) continue;
-        seenTransfers.add(key);
-        internalTransfers.push({
-          from: sender,
-          to: outAddr,
-          txid: tx.txid,
-          valueBtc: vout.value,
-        });
+  const seenTransferKeys = new Set<string>();
+  for (const res of sourceResults) {
+    if (res.status !== "fulfilled") continue;
+    for (const t of res.value.transfers) {
+      const key = `${t.from}:${t.to}`;
+      if (!seenTransferKeys.has(key)) {
+        seenTransferKeys.add(key);
+        internalTransfers.push(t);
       }
     }
   }

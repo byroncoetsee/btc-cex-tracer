@@ -202,17 +202,24 @@ export function runTrace(input: ScanInput): TraceResult {
     if (cluster.length >= 2) ownershipClusters.push(cluster);
   }
 
-  // Mock internal transfers between source addresses
+  // Mock internal transfers between source addresses (some multi-hop)
   const internalTransfers: InternalTransfer[] = [];
   const addrs = sources.map((s) => s.address);
-  const txidChars = "abcdef0123456789";
   for (let i = 0; i < addrs.length - 1 && rng() < 0.5; i++) {
     const from = addrs[i];
-    const to = addrs[i + 1 + Math.floor(rng() * Math.min(2, addrs.length - i - 1))];
+    const toIdx = i + 1 + Math.floor(rng() * Math.min(2, addrs.length - i - 1));
+    const to = addrs[toIdx];
     if (from === to) continue;
-    let txid = "";
-    for (let c = 0; c < 64; c++) txid += txidChars[Math.floor(rng() * txidChars.length)];
-    internalTransfers.push({ from, to, txid, valueBtc: +(rng() * 1.5).toFixed(6) });
+    const hopCount = 1 + Math.floor(rng() * 3);
+    const intermediates: string[] = [];
+    for (let h = 0; h < hopCount - 1; h++) intermediates.push(makeAddress(rng));
+    internalTransfers.push({
+      from,
+      to,
+      hops: hopCount,
+      valueBtc: +(rng() * 1.5).toFixed(6),
+      intermediates,
+    });
   }
 
   return {
