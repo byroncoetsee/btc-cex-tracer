@@ -1,0 +1,15 @@
+# Example CEX address file for BTC Tracer
+# Format: one address per line, or CSV with address as the first column
+# The filename determines the exchange label: <name>_addresses.csv
+# e.g. "coinbase_addresses.csv" → "Coinbase"
+#
+# To use your own data:
+# 1. Add CSV files to this directory matching the pattern *_addresses.csv
+# 2. Restart the app — files are loaded automatically on first trace
+#
+# These are publicly known Coinbase cold wallet addresses (for demonstration only):
+1FzWLkAahHooV3kzTgyx6qsXoRDrBsrXU1
+1GR9qNz7zgtaW5HwwVpEJWMnGWhsbsieCG
+1CDysWzQ5Z4hMLhsj4YAdSkgXoYUnyBgcY
+14mQxLPBLYsRUkUoRmc68jBsLQAS4pc3Ee
+1KiahsV4V4PnmmBfGMf1hmCjmugBYJkgp1
