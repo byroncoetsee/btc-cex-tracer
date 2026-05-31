@@ -82,6 +82,8 @@ export default function Page() {
 
   const { status: networkStatus, connected: liveConnected, connecting: liveConnecting } = useNetworkLive(nodeAddress, nodeOnline, useTls)
 
+  const isFirstVisit = hydrated && !nodeAddress && watchlist.length === 0 && traces.length === 0
+
   // keep selection valid; default to newest trace
   useEffect(() => {
     if (!hydrated) return
@@ -212,7 +214,11 @@ export default function Page() {
           <span>traces stored locally in your browser · no server · no database</span>
           <Link
             href="/guide"
-            className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 transition-colors hover:border-primary hover:text-primary"
+            className={`flex items-center gap-1 rounded-sm border px-2 py-1 transition-colors hover:border-primary hover:text-primary ${
+              isFirstVisit
+                ? "animate-pulse border-primary text-primary"
+                : "border-border"
+            }`}
           >
             <HelpCircle className="size-3" />
             what must i do?
