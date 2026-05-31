@@ -6,6 +6,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  outputFileTracingIncludes: {
+    "/api/**": ["./data/cex_addresses/**"],
+  },
 }
 
 export default nextConfig

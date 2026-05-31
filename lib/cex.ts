@@ -54,7 +54,7 @@ export async function loadCexDatabase(): Promise<Map<string, string>> {
 
   loading = (async () => {
     const map = new Map<string, string>()
-    const cexDir = path.join(process.cwd(), "public", "cex_addresses")
+    const cexDir = path.join(process.cwd(), "data", "cex_addresses")
 
     if (!fs.existsSync(cexDir)) {
       console.warn("CEX address directory not found:", cexDir)

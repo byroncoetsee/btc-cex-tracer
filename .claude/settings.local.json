@@ -21,7 +21,9 @@
       "Bash(curl -s -X POST \"http://localhost:3000/api/node/test\" -H \"Content-Type: application/json\" -d '{\"nodeAddress\":\"localhost:50002\",\"tls\":false}')",
       "Bash(curl -s -X POST \"http://localhost:3000/api/node/test\" -H \"Content-Type: application/json\" -d '{\"nodeAddress\":\"localhost:50001\",\"tls\":false}')",
       "Bash(ls -1 lib/*.ts)",
-      "Bash(wc -l lib/*.ts)"
+      "Bash(wc -l lib/*.ts)",
+      "Bash(mkdir -p data)",
+      "Bash(mv public/cex_addresses data/cex_addresses)"
     ]
   }
 }

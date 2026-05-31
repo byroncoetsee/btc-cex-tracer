@@ -5,6 +5,7 @@ import {
   Building2,
   Download,
   GitFork,
+  HelpCircle,
   LayoutDashboard,
   ListTree,
   History,
@@ -12,6 +13,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import Link from "next/link"
 import { useTracerStore } from "@/hooks/use-tracer-store"
 import { useNetworkLive } from "@/hooks/use-network-live"
 import { useSettings } from "@/hooks/use-settings"
@@ -205,8 +207,15 @@ export default function Page() {
           <ConnectionsView trace={active} />
         )}
 
-        <footer className="border-t border-border pt-4 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
-          traces stored locally in your browser · no server · no database
+        <footer className="flex items-center justify-center gap-3 border-t border-border pt-4 text-[10px] uppercase tracking-widest text-muted-foreground/60">
+          <span>traces stored locally in your browser · no server · no database</span>
+          <Link
+            href="/guide"
+            className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 transition-colors hover:border-primary hover:text-primary"
+          >
+            <HelpCircle className="size-3" />
+            what must i do?
+          </Link>
         </footer>
       </main>
     </div>
