@@ -23,7 +23,7 @@ import { SourcesView } from "@/components/views/sources-view"
 import { ExchangesView } from "@/components/views/exchanges-view"
 import { ConnectionsView } from "@/components/views/connections-view"
 import { SettingsView } from "@/components/views/settings-view"
-import { SettingsContext } from "@/components/settings-provider"
+import { SettingsContext, HoverContext, createHoverStore } from "@/components/settings-provider"
 
 type View = "dashboard" | "sources" | "exchanges" | "connections" | "history" | "settings"
 
@@ -76,6 +76,7 @@ export default function Page() {
   const [useTls, setUseTls] = useState(false)
 
   const { settings, update: updateSettings } = useSettings()
+  const [hoverStore] = useState(createHoverStore)
 
   const { status: networkStatus, connected: liveConnected, connecting: liveConnecting } = useNetworkLive(nodeAddress, nodeOnline, useTls)
 
@@ -105,6 +106,7 @@ export default function Page() {
 
   return (
     <SettingsContext.Provider value={settings}>
+    <HoverContext.Provider value={hoverStore}>
     <div className="min-h-screen">
       <TerminalHeader
         nodeAddress={nodeAddress}
@@ -208,6 +210,7 @@ export default function Page() {
         </footer>
       </main>
     </div>
+    </HoverContext.Provider>
     </SettingsContext.Provider>
   )
 }

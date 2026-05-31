@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Copy, Check } from "lucide-react"
 import { truncateAddr } from "@/lib/tracer"
 import { getAddressIdentity } from "@/lib/address-identity"
-import { useSettingsContext } from "@/components/settings-provider"
+import { useSettingsContext, useHoveredAddress } from "@/components/settings-provider"
 
 interface AddressChipProps {
   address: string
@@ -57,6 +57,10 @@ export function AddressChip({
   const [copied, setCopied] = useState(false)
   const identity = getAddressIdentity(address)
   const { showIdenticons, showNicknames } = useSettingsContext()
+  const [hoveredAddr, setHoveredAddr] = useHoveredAddress()
+  const isHighlighted = hoveredAddr === address
+  const isSomethingHovered = hoveredAddr !== null
+  const isDimmed = isSomethingHovered && !isHighlighted
 
   async function copy(e: React.MouseEvent) {
     if (stopPropagation) e.stopPropagation()
@@ -70,7 +74,19 @@ export function AddressChip({
   }
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${className}`} title={address}>
+    <span
+      className={`inline-flex items-center gap-1.5 transition-all duration-150 ${className} ${
+        isHighlighted
+          ? "rounded-sm ring-1 ring-current/40 bg-white/[0.06]"
+          : isDimmed
+            ? "opacity-40"
+            : ""
+      }`}
+      title={address}
+      style={isHighlighted ? { color: identity.color } : undefined}
+      onMouseEnter={() => setHoveredAddr(address)}
+      onMouseLeave={() => setHoveredAddr(null)}
+    >
       {showIdenticons && <Identicon grid={identity.identicon} color={identity.color} size={16} />}
       {showNickname && showNicknames ? (
         <span
