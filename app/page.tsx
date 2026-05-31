@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import {
   Building2,
   Download,
+  GitFork,
   LayoutDashboard,
   ListTree,
   History,
@@ -11,19 +12,22 @@ import {
   X,
 } from "lucide-react"
 import { useTracerStore } from "@/hooks/use-tracer-store"
+import { useNetworkLive } from "@/hooks/use-network-live"
 import type { TraceResult } from "@/lib/types"
 import { TerminalHeader } from "@/components/terminal-header"
 import { ScanConsole } from "@/components/scan-console"
 import { DashboardView } from "@/components/views/dashboard-view"
 import { SourcesView } from "@/components/views/sources-view"
 import { ExchangesView } from "@/components/views/exchanges-view"
+import { ConnectionsView } from "@/components/views/connections-view"
 
-type View = "dashboard" | "sources" | "exchanges" | "history"
+type View = "dashboard" | "sources" | "exchanges" | "connections" | "history"
 
 const TABS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "dashboard", icon: LayoutDashboard },
   { id: "sources", label: "sources", icon: ListTree },
   { id: "exchanges", label: "exchanges", icon: Building2 },
+  { id: "connections", label: "connections", icon: GitFork },
   { id: "history", label: "history", icon: History },
 ]
 
@@ -64,6 +68,9 @@ export default function Page() {
   const [view, setView] = useState<View>("dashboard")
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nodeOnline, setNodeOnline] = useState(false)
+  const [useTls, setUseTls] = useState(false)
+
+  const { status: networkStatus, connected: liveConnected, connecting: liveConnecting } = useNetworkLive(nodeAddress, nodeOnline, useTls)
 
   // keep selection valid; default to newest trace
   useEffect(() => {
@@ -91,7 +98,13 @@ export default function Page() {
 
   return (
     <div className="min-h-screen">
-      <TerminalHeader nodeAddress={nodeAddress} online={nodeOnline} />
+      <TerminalHeader
+        nodeAddress={nodeAddress}
+        online={nodeOnline}
+        liveStatus={networkStatus}
+        liveConnected={liveConnected}
+        liveConnecting={liveConnecting}
+      />
 
       <main className="mx-auto max-w-6xl space-y-5 px-4 py-5">
         <ScanConsole
@@ -101,6 +114,7 @@ export default function Page() {
             setNodeOnline(false)
           }}
           onNodeStatus={setNodeOnline}
+          onTlsChange={setUseTls}
           watchlist={watchlist}
           onAddWatch={addWatch}
           onRemoveWatch={removeWatch}
@@ -173,8 +187,10 @@ export default function Page() {
           <DashboardView trace={active} />
         ) : view === "sources" ? (
           <SourcesView trace={active} />
-        ) : (
+        ) : view === "exchanges" ? (
           <ExchangesView trace={active} />
+        ) : (
+          <ConnectionsView trace={active} />
         )}
 
         <footer className="border-t border-border pt-4 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">

@@ -1,4 +1,4 @@
-import type { CexLink, IntermediateWallet, LinkStrength, ScanInput, SourceAddress, TraceResult } from "./types";
+import type { CexLink, InternalTransfer, IntermediateWallet, LinkStrength, ScanInput, SourceAddress, TraceResult } from "./types";
 
 /**
  * Deterministic mock chain-analysis engine.
@@ -202,6 +202,19 @@ export function runTrace(input: ScanInput): TraceResult {
     if (cluster.length >= 2) ownershipClusters.push(cluster);
   }
 
+  // Mock internal transfers between source addresses
+  const internalTransfers: InternalTransfer[] = [];
+  const addrs = sources.map((s) => s.address);
+  const txidChars = "abcdef0123456789";
+  for (let i = 0; i < addrs.length - 1 && rng() < 0.5; i++) {
+    const from = addrs[i];
+    const to = addrs[i + 1 + Math.floor(rng() * Math.min(2, addrs.length - i - 1))];
+    if (from === to) continue;
+    let txid = "";
+    for (let c = 0; c < 64; c++) txid += txidChars[Math.floor(rng() * txidChars.length)];
+    internalTransfers.push({ from, to, txid, valueBtc: +(rng() * 1.5).toFixed(6) });
+  }
+
   return {
     id: `${seed.toString(16)}-${Date.now().toString(36)}`,
     label: input.label,
@@ -212,6 +225,7 @@ export function runTrace(input: ScanInput): TraceResult {
     addressesScanned,
     sources,
     ownershipClusters,
+    internalTransfers,
   };
 }
 

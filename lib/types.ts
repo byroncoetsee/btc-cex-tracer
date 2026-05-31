@@ -46,6 +46,13 @@ export interface SourceAddress {
   links: CexLink[];
 }
 
+export interface InternalTransfer {
+  from: string;
+  to: string;
+  txid: string;
+  valueBtc: number;
+}
+
 export interface TraceResult {
   id: string;
   /** the xpub / address label the user entered */
@@ -58,6 +65,8 @@ export interface TraceResult {
   sources: SourceAddress[];
   /** Groups of source addresses linked by common-input-ownership (co-spending). */
   ownershipClusters: string[][];
+  /** Direct on-chain transfers between source addresses. */
+  internalTransfers: InternalTransfer[];
 }
 
 export interface ScanInput {

@@ -13,6 +13,13 @@ interface ElectrumResponse {
   error?: { code: number; message: string };
 }
 
+/** Push notification from a subscription (no id, has method). */
+export interface ElectrumNotification {
+  jsonrpc: string;
+  method: string;
+  params: unknown[];
+}
+
 // ---------------------------------------------------------------------------
 // Connection helpers — remembers protocol per host:port
 // ---------------------------------------------------------------------------
@@ -106,6 +113,9 @@ export class ElectrumSession {
   private connecting: Promise<void> | null = null;
   private closed = false;
 
+  /** Optional handler for subscription push notifications. */
+  onNotification: ((n: ElectrumNotification) => void) | null = null;
+
   constructor(
     private host: string,
     private port: number,
@@ -142,11 +152,17 @@ export class ElectrumSession {
         this.buf = this.buf.slice(idx + 1);
         if (!line) continue;
         try {
-          const msg = JSON.parse(line) as ElectrumResponse;
-          const p = this.pending.get(msg.id);
+          const msg = JSON.parse(line);
+          // Subscription push notifications have "method" but no "id"
+          if ("method" in msg && !("id" in msg)) {
+            this.onNotification?.(msg as ElectrumNotification);
+            continue;
+          }
+          const resp = msg as ElectrumResponse;
+          const p = this.pending.get(resp.id);
           if (p) {
-            this.pending.delete(msg.id);
-            p.resolve(msg);
+            this.pending.delete(resp.id);
+            p.resolve(resp);
           }
         } catch {
           // skip malformed lines
@@ -560,5 +576,3 @@ export function parseNodeAddress(raw: string): { host: string; port: number } {
   }
   return { host: trimmed, port: 50002 };
 }
-
-export const SATOSHI_SCRIPTHASH = "8b01df4e368ea28f8dc0423bcf7a4923e3a12d307c875e47a0cfbf90b5c39161";

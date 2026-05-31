@@ -1,7 +1,7 @@
 import { ElectrumPool } from "./electrum";
 import { addressToScripthash } from "./address";
 import { checkCex, isPossibleCex } from "./cex";
-import type { CexDirection, CexLink, IntermediateWallet, LinkStrength, ObscurityBreakdown, SourceAddress, TraceResult } from "./types";
+import type { CexDirection, CexLink, InternalTransfer, IntermediateWallet, LinkStrength, ObscurityBreakdown, SourceAddress, TraceResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -647,6 +647,38 @@ export async function runRealTrace(
   }
   const ownershipClusters = [...clusterMap.values()].filter((g) => g.length >= 2);
 
+  // --- Detect direct transfers between source addresses ---
+  const internalTransfers: InternalTransfer[] = [];
+  const seenTransfers = new Set<string>(); // dedup by "txid:from:to"
+  for (const tx of sharedTxCache.values()) {
+    // Resolve which source addresses are inputs (senders)
+    const senders = new Set<string>();
+    for (const vin of tx.vin) {
+      if (!vin.txid) continue;
+      const prevTx = sharedTxCache.get(vin.txid);
+      const addr = prevTx?.vout[vin.vout]?.scriptPubKey?.address;
+      if (addr && sourceSet.has(addr)) senders.add(addr);
+    }
+    if (senders.size === 0) continue;
+    // Check outputs for source addresses that are NOT the sender (received from another source)
+    for (const vout of tx.vout) {
+      const outAddr = vout.scriptPubKey?.address;
+      if (!outAddr || !sourceSet.has(outAddr)) continue;
+      for (const sender of senders) {
+        if (sender === outAddr) continue;
+        const key = `${tx.txid}:${sender}:${outAddr}`;
+        if (seenTransfers.has(key)) continue;
+        seenTransfers.add(key);
+        internalTransfers.push({
+          from: sender,
+          to: outAddr,
+          txid: tx.txid,
+          valueBtc: vout.value,
+        });
+      }
+    }
+  }
+
   const totalLinks = resultSources.reduce((s, src) => s + src.links.length, 0);
   const durationMs = Date.now() - startTime;
   onProgress(
@@ -654,6 +686,9 @@ export async function runRealTrace(
   );
   if (ownershipClusters.length > 0) {
     onProgress(`> CIOH: ${ownershipClusters.length} ownership cluster${ownershipClusters.length > 1 ? "s" : ""} detected among source addresses`);
+  }
+  if (internalTransfers.length > 0) {
+    onProgress(`> ${internalTransfers.length} internal transfer${internalTransfers.length !== 1 ? "s" : ""} detected between source addresses`);
   }
 
   return {
@@ -666,5 +701,6 @@ export async function runRealTrace(
     addressesScanned: totalScanned,
     sources: resultSources,
     ownershipClusters,
+    internalTransfers,
   };
 }

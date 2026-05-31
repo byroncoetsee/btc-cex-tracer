@@ -27,7 +27,6 @@ interface NodeTestResult {
   ok: boolean;
   server?: string;
   protocol?: string;
-  satoshiBalance?: { confirmed: number; unconfirmed: number; confirmedBtc: number };
   error?: string;
 }
 
@@ -35,6 +34,7 @@ interface ScanConsoleProps {
   nodeAddress: string;
   onNodeAddressChange: (addr: string) => void;
   onNodeStatus: (online: boolean) => void;
+  onTlsChange: (tls: boolean) => void;
   watchlist: WatchEntry[];
   onAddWatch: (values: string[]) => number;
   onRemoveWatch: (id: string) => void;
@@ -48,6 +48,7 @@ export function ScanConsole({
   nodeAddress,
   onNodeAddressChange,
   onNodeStatus,
+  onTlsChange,
   watchlist,
   onAddWatch,
   onRemoveWatch,
@@ -55,7 +56,8 @@ export function ScanConsole({
   onComplete,
 }: ScanConsoleProps) {
   const [entryInput, setEntryInput] = useState("");
-  const [useTls, setUseTls] = useState(false);
+  const [useTls, setUseTlsLocal] = useState(false);
+  const setUseTls = (v: boolean) => { setUseTlsLocal(v); onTlsChange(v); };
   const [depth, setDepth] = useState(4);
   const [running, setRunning] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -286,59 +288,39 @@ export function ScanConsole({
               type="button"
               variant="outline"
               onClick={() => {
-                setUseTls((prev) => !prev);
+                setUseTls(!useTls);
                 setTestResult(null);
                 onNodeStatus(false);
               }}
-              className={`shrink-0 gap-1.5 font-bold uppercase tracking-widest ${
+              className={`shrink-0 size-9 p-0 ${
                 useTls
                   ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/20"
                   : "border-border bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               }`}
               aria-pressed={useTls}
+              aria-label={useTls ? "TLS enabled" : "TLS disabled"}
             >
               {useTls ? <Lock className="size-4" /> : <Unlock className="size-4" />}
-              tls
             </Button>
             <Button
               onClick={handleTest}
-              disabled={!canTest}
+              disabled={!canTest || (testResult?.ok ?? false)}
               variant="outline"
-              className="shrink-0 gap-1.5 border-primary/50 bg-transparent font-bold uppercase tracking-widest text-primary hover:bg-primary/10"
+              className={`shrink-0 size-9 p-0 ${
+                testResult?.ok
+                  ? "border-green-500/50 bg-green-500/10 text-green-400 hover:bg-green-500/15"
+                  : "border-primary/50 bg-transparent text-primary hover:bg-primary/10"
+              }`}
+              aria-label={testResult?.ok ? "Connected" : "Connect to node"}
             >
               {testing ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-              test
             </Button>
           </div>
-          {testResult && (
-            <div
-              className={`rounded-sm border px-3 py-2 text-xs font-mono ${
-                testResult.ok
-                  ? "border-green-500/40 bg-green-500/5 text-green-400"
-                  : "border-destructive/40 bg-destructive/5 text-destructive"
-              }`}
-            >
-              {testResult.ok ? (
-                <>
-                  <span className="font-bold">CONNECTED</span>
-                  {" — "}
-                  {testResult.server} (protocol {testResult.protocol})
-                  {testResult.satoshiBalance && (
-                    <span className="block mt-1 text-muted-foreground">
-                      liveness: satoshi&apos;s wallet (1A1zP1…DivfNa) = {testResult.satoshiBalance.confirmedBtc.toFixed(8)} BTC
-                      {testResult.satoshiBalance.unconfirmed > 0 && (
-                        <> + {(testResult.satoshiBalance.unconfirmed / 1e8).toFixed(8)} unconfirmed</>
-                      )}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <span className="font-bold">FAILED</span>
-                  {" — "}
-                  {testResult.error}
-                </>
-              )}
+          {testResult && !testResult.ok && (
+            <div className="rounded-sm border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs font-mono text-destructive">
+              <span className="font-bold">FAILED</span>
+              {" — "}
+              {testResult.error}
             </div>
           )}
         </div>
