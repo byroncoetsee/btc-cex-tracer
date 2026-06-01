@@ -43,15 +43,21 @@ npm install
 
 ### CEX address databases
 
-The tracer matches on-chain addresses against known exchange addresses stored as CSV files in `data/cex_addresses/`. These are **not included in the repo** — you bring your own.
+The tracer matches on-chain addresses against known exchange addresses. You supply these as CSV files in `data/cex_addresses/` (named `<exchange>_addresses.csv`), then build them into a compact **Bloom filter** that the app loads at runtime. The CSVs are **not included in the repo** — you bring your own.
 
-An example file (`example_addresses.csv`) is included to show the expected format. To add your own:
+Rather than loading millions of raw addresses into memory, the build step hashes each address into a per-exchange Bloom filter (1% false-positive rate) serialized to `data/cex-bloom.json`. This keeps lookups O(1) and memory usage flat regardless of how many addresses you load — at the cost of an occasional false positive, which downstream scoring treats as low-confidence.
 
-1. Place CSV files in `data/cex_addresses/` with the naming pattern `<exchange>_addresses.csv`
-2. The exchange name is derived from the filename — `coinbase_addresses.csv` becomes **Coinbase**, `kraken_addresses.csv` becomes **Kraken**, etc.
-3. Restart the app — files are detected and loaded automatically on the first trace
+To set up your databases:
 
-**Format:** one address per line, or CSV with the address as the first column. Lines starting with `#` and common headers are skipped.
+1. Place CSV files in `data/cex_addresses/` with the naming pattern `<exchange>_addresses.csv`. The exchange name is derived from the filename — `coinbase_addresses.csv` becomes **Coinbase**, `kraken_addresses.csv` becomes **Kraken**, etc.
+2. Build the Bloom filter:
+   ```bash
+   npm run build:cex
+   ```
+   This reads every `*_addresses.csv` (skipping `example_addresses.csv`) and writes `data/cex-bloom.json`.
+3. Start (or restart) the app — it loads `data/cex-bloom.json` on the first trace. Re-run `build:cex` whenever you add or change CSVs.
+
+**CSV format:** one address per line, or CSV with the address as the first column. Lines starting with `#` and common headers are skipped.
 
 ```csv
 # coinbase_addresses.csv
@@ -59,7 +65,7 @@ An example file (`example_addresses.csv`) is included to show the expected forma
 1GR9qNz7zgtaW5HwwVpEJWMnGWhsbsieCG
 ```
 
-The tracer works without any CEX data — traces will still run and map transaction flows, they just won't identify exchange endpoints. The more comprehensive your address databases, the better the results.
+The tracer works without any CEX data — if `data/cex-bloom.json` is absent, traces still run and map transaction flows, they just won't identify exchange endpoints. The more comprehensive your address databases, the better the results.
 
 ### Running
 
@@ -73,6 +79,15 @@ npm start
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Enter your Electrum node address, paste an xpub or Bitcoin address, and start a trace.
+
+### Where to run it (important)
+
+The Electrum connection is made **server-side**, not in your browser. Your browser sends the node address to a Next.js API route, and the *server process* opens the TCP/TLS socket to your node. This has a key consequence for how you deploy:
+
+- **Local Electrum node** (e.g. an Umbrel/Start9 box, or anything on your LAN/VPN) → **run DOXd on a machine that can reach that node directly.** Run it on your own LAN, or on a device joined to the same VPN/tailnet as the node. A cloud-hosted instance (Vercel, etc.) **cannot** reach `*.local` mDNS names or private IPs like `192.168.x.x` / `100.x.x.x` — the connection just times out, because the *server* doing the connecting isn't on your network, even if your browser is.
+- **Public Electrum server** → if you want to host DOXd in the cloud, point it at a publicly reachable Fulcrum/ElectrumX endpoint (a public server, or your own node exposed via Tor, a Tailscale Funnel, or a Cloudflare/SSH tunnel). ⚠️ Exposing your own Electrum port to the internet has privacy/security tradeoffs.
+
+In short: the machine running DOXd's backend — not your browser — must be able to reach the node.
 
 ## How it works
 

@@ -9,6 +9,12 @@
       "type": "node-terminal",
       "request": "launch",
       "command": "npm run dev -- --inspect"
+    },
+    {
+      "name": "Build CEX bloom",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm build:cex"
     }
   ]
 }
