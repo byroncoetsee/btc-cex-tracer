@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     const { host, port } = parseNodeAddress(nodeAddress)
 
     const versionRes = await electrumCall(host, port, "server.version", [
-      "BTC-Tracer",
+      "DOXd",
       "1.4",
     ], 8000, useTls ?? false)
     if (versionRes.error) {

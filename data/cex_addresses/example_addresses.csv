@@ -1,4 +1,4 @@
-# Example CEX address file for BTC Tracer
+# Example CEX address file for DOXd
 # Format: one address per line, or CSV with address as the first column
 # The filename determines the exchange label: <name>_addresses.csv
 # e.g. "coinbase_addresses.csv" → "Coinbase"

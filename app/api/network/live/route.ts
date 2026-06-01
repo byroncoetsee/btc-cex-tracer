@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
         await session.connect()
 
         // Handshake
-        const ver = await session.call("server.version", ["BTC-Tracer-Live", "1.4"])
+        const ver = await session.call("server.version", ["DOXd-Live", "1.4"])
         if (ver.error) {
           send("error", { message: `Handshake failed: ${ver.error.message}` })
           controller.close()

@@ -9,7 +9,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'TC ADDRESS TRACER // chain analysis terminal',
+  title: 'DOXd // chain analysis terminal',
   description:
     'Trace whether your Bitcoin addresses can be linked back to a centralized exchange. Retro terminal chain-analysis tool.',
   generator: 'v0.app',

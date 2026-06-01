@@ -19,7 +19,7 @@ const SECTIONS = [
     title: "what is this?",
     icon: Eye,
     content: [
-      "BTC Tracer is a chain-analysis terminal that checks whether your Bitcoin addresses can be linked back to centralized exchanges (CEXs).",
+      "DOXd is a chain-analysis terminal that checks whether your Bitcoin addresses can be linked back to centralized exchanges (CEXs).",
       "It connects directly to an Electrum-compatible node, walks the transaction graph outward from your addresses, and looks for known exchange deposit and withdrawal addresses. When it finds a link, it scores how strong the connection is.",
       "Think of it as a privacy check — are your coins traceable back to an exchange where you KYC'd?",
     ],
@@ -270,7 +270,7 @@ export default function GuidePage() {
 
         <footer className="border-t border-border pt-4 text-center text-[10px] uppercase tracking-widest text-muted-foreground/60">
           <Link href="/" className="hover:text-primary transition-colors">
-            back to tracer
+            back to DOXd
           </Link>
         </footer>
       </div>

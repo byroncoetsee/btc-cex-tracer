@@ -74,10 +74,10 @@ export function TerminalHeader({ nodeAddress, online, liveStatus, liveConnected,
           </div>
           <div className="leading-tight">
             <h1 className="text-sm font-bold tracking-[0.2em] text-primary text-glow">
-              TC&nbsp;ADDRESS&nbsp;TRACER
+              DOXd
             </h1>
             <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-              btc chain-analysis console v1.0
+              btc chain-analysis terminal v1.0
             </p>
           </div>
         </div>

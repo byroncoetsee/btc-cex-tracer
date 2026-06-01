@@ -1,4 +1,4 @@
-# BTC Tracer
+# DOXd
 
 A Bitcoin chain-analysis tool that traces whether your addresses can be linked back to centralized exchanges (CEXs). It follows transaction flows on-chain, detects same-entity address clusters, and scores how exposed each address is — all through a retro terminal-style interface.
 
@@ -8,7 +8,7 @@ A Bitcoin chain-analysis tool that traces whether your addresses can be linked b
 
 ## What it does
 
-BTC Tracer connects to an Electrum-compatible node and walks the transaction graph outward from your addresses (or xpub-derived addresses), looking for known CEX deposit/withdrawal addresses. It then calculates an **obscurity score** based on hop distance, value continuity, fan-out complexity, and counterparty analysis.
+DOXd connects to an Electrum-compatible node and walks the transaction graph outward from your addresses (or xpub-derived addresses), looking for known CEX deposit/withdrawal addresses. It then calculates an **obscurity score** based on hop distance, value continuity, fan-out complexity, and counterparty analysis.
 
 **Key capabilities:**
 
@@ -36,8 +36,8 @@ BTC Tracer connects to an Electrum-compatible node and walks the transaction gra
 ### Installation
 
 ```bash
-git clone https://github.com/your-username/btc-tracer.git
-cd btc-tracer
+git clone https://github.com/byroncoetsee/btc-cex-tracer.git
+cd btc-cex-tracer
 npm install
 ```
 
@@ -76,7 +76,7 @@ Open [http://localhost:3000](http://localhost:3000). Enter your Electrum node ad
 
 ## How it works
 
-1. **Address discovery** — If you provide an xpub, BTC Tracer derives addresses across all derivation schemes (BIP44/49/84/86) and queries the node for funded ones.
+1. **Address discovery** — If you provide an xpub, DOXd derives addresses across all derivation schemes (BIP44/49/84/86) and queries the node for funded ones.
 2. **Transaction graph traversal** — For each funded address, it fetches transaction history and follows outputs forward (and inputs backward) through the configured hop depth.
 3. **CIOH clustering** — Addresses that appear as co-inputs in the same transaction are grouped into ownership clusters. Hops within a cluster count as zero effective hops.
 4. **CEX matching** — Each address encountered is checked against the loaded CEX databases.
@@ -122,7 +122,7 @@ Open [http://localhost:3000](http://localhost:3000). Enter your Electrum node ad
 
 ## Privacy
 
-BTC Tracer is designed with privacy in mind:
+DOXd is designed with privacy in mind:
 
 - **No server-side storage** — trace results live only in your browser's localStorage
 - **Direct node connection** — your queries go straight to the Electrum node you configure, not through any third-party API
