@@ -1,104 +1,72 @@
 import * as fs from "fs"
 import * as path from "path"
-import * as readline from "readline"
+import {
+  type BloomFilter,
+  bloomCheck,
+  deserializeBloom,
+  type SerializedBloomFilter,
+} from "./bloom"
 
-/**
- * CEX address database — lazy-loaded singleton.
- * Reads all *_addresses.csv files from public/cex_addresses/ on first access.
- */
+const POSSIBLE_CEX_THRESHOLD = 500
 
-let cexMap: Map<string, string> | null = null
-let loading: Promise<Map<string, string>> | null = null
-
-const POSSIBLE_CEX_THRESHOLD = 500 // history entries
-
-async function loadFile(
-  filePath: string,
-  exchange: string,
-  map: Map<string, string>,
-): Promise<number> {
-  return new Promise((resolve, reject) => {
-    let count = 0
-    const stream = fs.createReadStream(filePath, { encoding: "utf8" })
-    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
-
-    rl.on("line", (line) => {
-      // skip headers, comments, empty lines
-      const trimmed = line.trim()
-      if (
-        !trimmed ||
-        trimmed.startsWith("#") ||
-        trimmed.startsWith('"#') ||
-        trimmed === "address" ||
-        trimmed.startsWith("address,")
-      )
-        return
-
-      // address is always the first column
-      const addr = trimmed.split(",")[0].replace(/"/g, "").trim()
-      if (addr && addr.length >= 26) {
-        map.set(addr, exchange)
-        count++
-      }
-    })
-
-    rl.on("close", () => resolve(count))
-    rl.on("error", reject)
-    stream.on("error", reject)
-  })
+interface CexBloomData {
+  version: number
+  totalAddresses: number
+  exchanges: Record<string, { count: number; filter: SerializedBloomFilter }>
 }
 
-export async function loadCexDatabase(): Promise<Map<string, string>> {
-  if (cexMap) return cexMap
+export interface CexDatabase {
+  exchanges: Map<string, BloomFilter>
+  totalAddresses: number
+}
+
+let cexDb: CexDatabase | null = null
+let loading: Promise<CexDatabase> | null = null
+
+export async function loadCexDatabase(): Promise<CexDatabase> {
+  if (cexDb) return cexDb
   if (loading) return loading
 
   loading = (async () => {
-    const map = new Map<string, string>()
-    const cexDir = path.join(process.cwd(), "data", "cex_addresses")
+    const bloomPath = path.join(process.cwd(), "data", "cex-bloom.json")
 
-    if (!fs.existsSync(cexDir)) {
-      console.warn("CEX address directory not found:", cexDir)
-      cexMap = map
-      return map
+    if (!fs.existsSync(bloomPath)) {
+      console.warn("[cex] bloom filter not found:", bloomPath)
+      console.warn("[cex] run `pnpm build:cex` to generate from CSV files")
+      cexDb = { exchanges: new Map(), totalAddresses: 0 }
+      return cexDb
     }
 
-    const files = fs
-      .readdirSync(cexDir)
-      .filter((f) => f.endsWith("_addresses.csv"))
+    const raw = JSON.parse(
+      fs.readFileSync(bloomPath, "utf8"),
+    ) as CexBloomData
+    const exchanges = new Map<string, BloomFilter>()
 
-    for (const file of files) {
-      // extract exchange name: "binance_addresses.csv" → "Binance"
-      // "walletexplorer-0000001bce8b8aa0-addresses.csv" → "Binance (WE)"
-      let exchange: string
-      if (file.startsWith("walletexplorer")) {
-        exchange = "Binance (WE)"
-      } else {
-        exchange = file
-          .replace("_addresses.csv", "")
-          .replace(/(^|\s)\S/g, (m) => m.toUpperCase())
-      }
-
-      const count = await loadFile(path.join(cexDir, file), exchange, map)
-      console.log(`[cex] loaded ${count.toLocaleString()} addresses from ${file} (${exchange})`)
+    for (const [name, data] of Object.entries(raw.exchanges)) {
+      exchanges.set(name, deserializeBloom(data.filter))
+      console.log(
+        `[cex] loaded ${name} (${data.count.toLocaleString()} addresses)`,
+      )
     }
 
-    console.log(`[cex] total: ${map.size.toLocaleString()} unique addresses`)
-    cexMap = map
-    return map
+    console.log(
+      `[cex] total: ${raw.totalAddresses.toLocaleString()} addresses across ${exchanges.size} exchanges`,
+    )
+
+    cexDb = { exchanges, totalAddresses: raw.totalAddresses }
+    return cexDb
   })()
 
   return loading
 }
 
-/** Check if an address is a known CEX. Returns exchange name or null. */
-export function checkCex(
-  addr: string,
-  db: Map<string, string>,
-): string | null {
-  return db.get(addr) ?? null
+export function checkCex(addr: string, db: CexDatabase): string | null {
+  for (const [exchange, filter] of db.exchanges) {
+    if (bloomCheck(filter, addr)) return exchange
+  }
+  return null
 }
 
-/** Heuristic: flag high-activity addresses as possible CEX. */
 export function isPossibleCex(historyLength: number): boolean {
   return historyLength >= POSSIBLE_CEX_THRESHOLD
 }

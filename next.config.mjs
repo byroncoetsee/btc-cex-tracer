@@ -7,7 +7,7 @@ const nextConfig = {
     unoptimized: true,
   },
   outputFileTracingIncludes: {
-    "/api/**": ["./data/cex_addresses/**"],
+    "/api/**": ["./data/cex-bloom.json"],
   },
 }
 

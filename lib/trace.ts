@@ -1,6 +1,6 @@
 import { ElectrumPool } from "./electrum";
 import { addressToScripthash } from "./address";
-import { checkCex, isPossibleCex } from "./cex";
+import { checkCex, isPossibleCex, type CexDatabase } from "./cex";
 import type { CexDirection, CexLink, InternalTransfer, IntermediateWallet, LinkStrength, ObscurityBreakdown, SourceAddress, TraceResult } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -294,7 +294,7 @@ function recordCex(
 async function traceSource(
   sourceAddr: string,
   session: ElectrumPool,
-  cexDb: Map<string, string>,
+  cexDb: CexDatabase,
   maxDepth: number,
   onProgress: ProgressFn,
   sharedTxCache: Map<string, VerboseTx>,
@@ -600,7 +600,7 @@ export async function runRealTrace(
   host: string,
   port: number,
   depth: number,
-  cexDb: Map<string, string>,
+  cexDb: CexDatabase,
   onProgress: ProgressFn,
   useTls = false,
 ): Promise<TraceResult> {

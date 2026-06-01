@@ -56,7 +56,7 @@ export async function POST(req: Request) {
         send("log", { message: "$ loading CEX address database…" })
         const cexDb = await loadCexDatabase()
         send("log", {
-          message: `> ${cexDb.size.toLocaleString()} known CEX addresses loaded`,
+          message: `> ${cexDb.totalAddresses.toLocaleString()} known CEX addresses loaded`,
         })
 
         send("log", {
