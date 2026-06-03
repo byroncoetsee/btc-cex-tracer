@@ -1,2 +1,5 @@
-allowBuilds:
-  sharp: set this to true or false
+# sharp is only pulled in transitively for Next.js image optimization, which we
+# disable (images.unoptimized = true). Acknowledge its build script as ignored
+# so `pnpm install --frozen-lockfile` doesn't error out (ERR_PNPM_IGNORED_BUILDS).
+ignoredBuiltDependencies:
+  - sharp

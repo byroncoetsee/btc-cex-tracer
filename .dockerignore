@@ -1,0 +1,18 @@
+# Build artifacts & deps (reinstalled/rebuilt in-image)
+node_modules
+.next
+.git
+.vscode
+
+# Raw CEX CSVs are large (~370MB) and not needed at runtime — only the
+# pre-built bloom filter (data/cex-bloom.json) is shipped.
+data/cex_addresses
+
+# Local-only and ephemeral
+trace-logs
+*.tsbuildinfo
+.env*.local
+.DS_Store
+npm-debug.log*
+README.md
+umbrel

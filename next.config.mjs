@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Emit a self-contained server bundle (.next/standalone) for slim Docker images.
+  output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },

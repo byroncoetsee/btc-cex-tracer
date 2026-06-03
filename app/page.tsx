@@ -76,6 +76,7 @@ export default function Page() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nodeOnline, setNodeOnline] = useState(false)
   const [useTls, setUseTls] = useState(false)
+  const [prefillTried, setPrefillTried] = useState(false)
 
   const { settings, update: updateSettings } = useSettings()
   const [hoverStore] = useState(createHoverStore)
@@ -83,6 +84,27 @@ export default function Page() {
   const { status: networkStatus, connected: liveConnected, connecting: liveConnecting } = useNetworkLive(nodeAddress, nodeOnline, useTls)
 
   const isFirstVisit = hydrated && !nodeAddress && watchlist.length === 0 && traces.length === 0
+
+  // Pre-fill the node address from the deploy's env (e.g. Umbrel's bundled
+  // Electrs) when the user hasn't set one yet. Runs once, after hydration.
+  useEffect(() => {
+    if (!hydrated || prefillTried || nodeAddress) return
+    setPrefillTried(true)
+    let cancelled = false
+    fetch("/api/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg: { defaultNode?: string; defaultTls?: boolean } | null) => {
+        if (cancelled || !cfg?.defaultNode) return
+        setNodeAddress(cfg.defaultNode)
+        setUseTls(Boolean(cfg.defaultTls))
+      })
+      .catch(() => {
+        /* no default configured — user enters the node manually */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hydrated, prefillTried, nodeAddress, setNodeAddress])
 
   // keep selection valid; default to newest trace
   useEffect(() => {

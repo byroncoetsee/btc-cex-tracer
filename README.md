@@ -80,6 +80,49 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000). Enter your Electrum node address, paste an xpub or Bitcoin address, and start a trace.
 
+### Running with Docker
+
+DOXd ships a multi-stage [`Dockerfile`](Dockerfile) that builds a slim, self-contained image (Next.js standalone output, ~225 MB). The pre-built `data/cex-bloom.json` is baked into the image, so **build the Bloom filter first** (see above) if you want CEX matching — the raw CSVs are excluded from the image, only the filter is shipped.
+
+```bash
+# Build the CEX Bloom filter (optional, but recommended)
+npm run build:cex
+
+# Build the image
+docker build -t doxd .
+
+# Run it
+docker run -d --name doxd -p 3000:3000 doxd
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+**Auto-connecting to a node.** By default the node address is entered in the UI. To pre-fill it (so the app connects out of the box), set these environment variables:
+
+| Variable | Example | Description |
+|---|---|---|
+| `DEFAULT_NODE` | `10.21.0.5:50001` | `host:port` of an Electrum/Fulcrum node, pre-filled on first load |
+| `DEFAULT_NODE_TLS` | `false` | Default state of the TLS toggle (`true`/`false`) |
+
+```bash
+docker run -d --name doxd -p 3000:3000 \
+  -e DEFAULT_NODE="10.21.0.5:50001" \
+  -e DEFAULT_NODE_TLS="false" \
+  doxd
+```
+
+Remember the [connection constraint](#where-to-run-it-important): the *container* opens the socket to the node, so the container must be able to reach that `host:port` on its network.
+
+### Running as an Umbrel app
+
+DOXd connects directly to Umbrel's bundled Electrs node on the internal Docker network, which makes it a natural fit — no LAN/VPN gymnastics, and on-chain queries never leave the device. The [`umbrel/`](umbrel/) directory contains the app manifest ([`umbrel-app.yml`](umbrel/umbrel-app.yml)) and [`docker-compose.yml`](umbrel/docker-compose.yml). The compose file auto-wires `DEFAULT_NODE` to Electrs via Umbrel's injected `${APP_ELECTRS_NODE_IP}:${APP_ELECTRS_NODE_PORT}`, so it connects with zero configuration.
+
+To install:
+
+1. **Push a tagged image** to a registry and pin it in [`umbrel/docker-compose.yml`](umbrel/docker-compose.yml) (the Umbrel App Store installs from a published image, not from source — ideally pin a `@sha256:` digest).
+2. **Self-host now** via a [community app store](https://github.com/getumbrel/umbrel-community-app-store): drop the two files under `<store>/doxd/` and add the store URL in your Umbrel's *App Store → Community App Stores*. No review needed.
+3. **Official store** (optional): submit a PR to [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps) and fill in the `submission:` field in the manifest.
+
 ### Where to run it (important)
 
 The Electrum connection is made **server-side**, not in your browser. Your browser sends the node address to a Next.js API route, and the *server process* opens the TCP/TLS socket to your node. This has a key consequence for how you deploy:
