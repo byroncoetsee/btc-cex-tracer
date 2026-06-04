@@ -68,9 +68,36 @@ export function ScanConsole({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [log, setLog] = useState<string[]>([]);
+  // node address the server detected from its env (e.g. Umbrel's Electrs)
+  const [detected, setDetected] = useState<{ node: string; tls: boolean } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // read inside the async fetch below so it never overwrites a saved/typed value
+  const nodeAddressRef = useRef(nodeAddress);
+  nodeAddressRef.current = nodeAddress;
+
+  // Ask the server which node it can reach, then: pre-fill the field if it's
+  // empty, and always remember it so we can offer it as a one-click chip.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg: { defaultNode?: string; defaultTls?: boolean } | null) => {
+        if (cancelled || !cfg?.defaultNode) return;
+        setDetected({ node: cfg.defaultNode, tls: Boolean(cfg.defaultTls) });
+        if (!nodeAddressRef.current.trim()) {
+          onNodeAddressChange(cfg.defaultNode);
+          setUseTls(Boolean(cfg.defaultTls));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // only auto-scroll if user is already near the bottom
   useEffect(() => {
@@ -322,6 +349,24 @@ export function ScanConsole({
               {" — "}
               {testResult.error}
             </div>
+          )}
+          {detected && detected.node !== nodeAddress.trim() && (
+            <button
+              type="button"
+              onClick={() => {
+                onNodeAddressChange(detected.node);
+                setUseTls(detected.tls);
+                setTestResult(null);
+                onNodeStatus(false);
+              }}
+              className="flex w-full items-center gap-1.5 rounded-sm border border-primary/40 bg-primary/5 px-2.5 py-1.5 text-left font-mono text-[11px] text-primary transition-colors hover:bg-primary/10"
+              title="Use the node detected on this device"
+            >
+              <Server className="size-3 shrink-0" />
+              <span className="text-muted-foreground">detected node:</span>
+              <span className="truncate font-bold">{detected.node}</span>
+              <span className="ml-auto shrink-0 uppercase tracking-widest">use →</span>
+            </button>
           )}
         </div>
 
