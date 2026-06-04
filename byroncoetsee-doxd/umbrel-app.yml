@@ -2,8 +2,11 @@ manifestVersion: 1
 id: byroncoetsee-doxd
 category: bitcoin
 name: DOXd
-version: "1.0.0"
+version: "1.1.0"
 tagline: Trace whether your Bitcoin addresses link back to exchanges
+releaseNotes: >-
+  Auto-detects your Umbrel's Electrs node and pre-fills the node address, with a
+  one-click "detected node" chip so you no longer have to find or type it.
 description: >-
   DOXd is a chain-analysis tool that traces whether your addresses can be
   linked back to centralized exchanges (CEXs). It walks the transaction graph
