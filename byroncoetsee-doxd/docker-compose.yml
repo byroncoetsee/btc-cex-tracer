@@ -1,0 +1,22 @@
+version: "3.7"
+
+services:
+  # Umbrel's reverse proxy — exposes the app on the dashboard.
+  app_proxy:
+    environment:
+      APP_HOST: byroncoetsee-doxd_web_1
+      APP_PORT: 3000
+
+  web:
+    # Built on the Umbrel device with this exact tag (no registry needed):
+    #   git clone https://github.com/byroncoetsee/btc-cex-tracer.git
+    #   cd btc-cex-tracer && docker build -t byroncoetsee/doxd:1.0.0 .
+    image: byroncoetsee/doxd:1.0.0
+    restart: on-failure
+    stop_grace_period: 1m
+    environment:
+      # Auto-connect to Umbrel's bundled Electrs node (declared as a dependency
+      # in umbrel-app.yml). These vars are injected by the Umbrel app runtime.
+      DEFAULT_NODE: "${APP_ELECTRS_NODE_IP}:${APP_ELECTRS_NODE_PORT}"
+      DEFAULT_NODE_TLS: "false"
+      NODE_ENV: production

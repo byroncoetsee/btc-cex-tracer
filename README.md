@@ -115,13 +115,30 @@ Remember the [connection constraint](#where-to-run-it-important): the *container
 
 ### Running as an Umbrel app
 
-DOXd connects directly to Umbrel's bundled Electrs node on the internal Docker network, which makes it a natural fit — no LAN/VPN gymnastics, and on-chain queries never leave the device. The [`umbrel/`](umbrel/) directory contains the app manifest ([`umbrel-app.yml`](umbrel/umbrel-app.yml)) and [`docker-compose.yml`](umbrel/docker-compose.yml). The compose file auto-wires `DEFAULT_NODE` to Electrs via Umbrel's injected `${APP_ELECTRS_NODE_IP}:${APP_ELECTRS_NODE_PORT}`, so it connects with zero configuration.
+DOXd connects directly to Umbrel's bundled Electrs node on the internal Docker network, which makes it a natural fit — no LAN/VPN gymnastics, and on-chain queries never leave the device. The compose file auto-wires `DEFAULT_NODE` to Electrs via Umbrel's injected `${APP_ELECTRS_NODE_IP}:${APP_ELECTRS_NODE_PORT}`, so it connects with zero configuration.
 
-To install:
+**This repo is itself a [community app store](https://github.com/getumbrel/umbrel-community-app-store)** — no submission or review process. Its layout:
 
-1. **Push a tagged image** to a registry and pin it in [`umbrel/docker-compose.yml`](umbrel/docker-compose.yml) (the Umbrel App Store installs from a published image, not from source — ideally pin a `@sha256:` digest).
-2. **Self-host now** via a [community app store](https://github.com/getumbrel/umbrel-community-app-store): drop the two files under `<store>/doxd/` and add the store URL in your Umbrel's *App Store → Community App Stores*. No review needed.
-3. **Official store** (optional): submit a PR to [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps) and fill in the `submission:` field in the manifest.
+```
+umbrel-app-store.yml          # store id (byroncoetsee) + name
+byroncoetsee-doxd/            # app folder (id must be <store-id>-<app>)
+├── umbrel-app.yml            # the manifest
+└── docker-compose.yml        # auto-wires DEFAULT_NODE to Electrs
+```
+
+To install on your Umbrel:
+
+1. **Build the image on the device** (so it matches your Umbrel's CPU arch and needs no registry). SSH in and:
+   ```bash
+   cd ~/umbrel/app-data
+   git clone https://github.com/byroncoetsee/btc-cex-tracer.git doxd-build
+   cd doxd-build && docker build -t byroncoetsee/doxd:1.0.0 .
+   ```
+   The tag must exactly match the `image:` in [`byroncoetsee-doxd/docker-compose.yml`](byroncoetsee-doxd/docker-compose.yml) so the install uses your local image instead of pulling.
+2. **Add the store** in the Umbrel dashboard: *App Store → ⋯ (top-right) → Community App Stores →* paste `https://github.com/byroncoetsee/btc-cex-tracer` *→ Add*. DOXd then appears in the store — click **Install**.
+   - Or from SSH: `~/umbrel/scripts/app install byroncoetsee-doxd`
+
+*Alternative to step 1:* push `byroncoetsee/doxd:1.0.0` to a public registry (Docker Hub / GHCR) once, and installs/updates "just work" without building on-device. To submit to the **official** Umbrel App Store instead, open a PR against [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps).
 
 ### Where to run it (important)
 

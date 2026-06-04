@@ -1,0 +1,50 @@
+manifestVersion: 1
+id: byroncoetsee-doxd
+category: bitcoin
+name: DOXd
+version: "1.0.0"
+tagline: Trace whether your Bitcoin addresses link back to exchanges
+description: >-
+  DOXd is a chain-analysis tool that traces whether your addresses can be
+  linked back to centralized exchanges (CEXs). It walks the transaction graph
+  outward from your addresses (or xpub-derived addresses), detects same-entity
+  address clusters using the Common-Input-Ownership Heuristic, and scores how
+  exposed each address is — all through a retro terminal-style interface.
+
+
+  It connects directly to your Umbrel's bundled Electrs node, so on-chain
+  queries never leave your device. All trace results are stored locally in your
+  browser — no server database, no accounts, no cloud sync.
+
+
+  Features:
+
+  - Xpub address derivation (BIP44/49/84/86)
+
+  - On-chain path tracing 2–6 hops deep with live streaming progress
+
+  - CIOH clustering to detect same-entity wallets
+
+  - 8-level obscurity risk scoring from 6 weighted factors
+
+  - Pre-loaded CEX address databases (memory-efficient Bloom filter)
+
+  - Interactive force-directed connection graph
+
+  - Live block height, fee estimates, and mempool pressure
+developer: Byron Coetsee
+website: https://github.com/byroncoetsee/btc-cex-tracer
+dependencies:
+  - electrs
+repo: https://github.com/byroncoetsee/btc-cex-tracer
+support: https://github.com/byroncoetsee/btc-cex-tracer/issues
+port: 3037
+gallery:
+  - 1.jpg
+  - 2.jpg
+  - 3.jpg
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: Byron Coetsee
+submission: https://github.com/byroncoetsee/btc-cex-tracer
