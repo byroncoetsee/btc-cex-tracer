@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Copy, Check } from "lucide-react"
 import { truncateAddr } from "@/lib/tracer"
+import { copyToClipboard } from "@/lib/clipboard"
 import { getAddressIdentity } from "@/lib/address-identity"
 import { useSettingsContext, useHoveredAddress, useActiveTrace } from "@/components/settings-provider"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
@@ -68,12 +69,9 @@ export function AddressChip({
   async function copy(e: React.MouseEvent) {
     e.stopPropagation()
     e.preventDefault()
-    try {
-      await navigator.clipboard.writeText(address)
+    if (await copyToClipboard(address)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
-    } catch {
-      /* clipboard unavailable */
     }
   }
 

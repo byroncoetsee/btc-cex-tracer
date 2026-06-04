@@ -4,6 +4,7 @@ import { Copy, Check, ArrowDownLeft, ArrowUpRight, Link2, Fingerprint, ArrowRigh
 import { useState } from "react"
 import { riskLabel } from "@/lib/aggregates"
 import { strengthColor, truncateAddr } from "@/lib/tracer"
+import { copyToClipboard } from "@/lib/clipboard"
 import { getAddressIdentity } from "@/lib/address-identity"
 import type { TraceResult, SourceAddress, CexLink, InternalTransfer } from "@/lib/types"
 
@@ -109,11 +110,10 @@ export function AddressPopoverContent({ address, trace }: AddressPopoverContentP
   const outflows = source?.links.filter((l) => l.direction === "outflow") ?? []
 
   async function copyAddr() {
-    try {
-      await navigator.clipboard.writeText(address)
+    if (await copyToClipboard(address)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
-    } catch { /* */ }
+    }
   }
 
   return (

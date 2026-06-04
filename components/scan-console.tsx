@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { copyToClipboard } from "@/lib/clipboard";
 import type { LookupGroup, TraceResult, WatchEntry } from "@/lib/types";
 
 interface NodeTestResult {
@@ -702,7 +703,7 @@ function LogLine({ line }: { line: string }) {
             key={i}
             className="cursor-pointer underline decoration-dotted underline-offset-2 hover:text-primary"
             title="click to copy"
-            onClick={() => navigator.clipboard.writeText(p.addr)}
+            onClick={() => copyToClipboard(p.addr)}
           >
             {p.addr}
           </span>
