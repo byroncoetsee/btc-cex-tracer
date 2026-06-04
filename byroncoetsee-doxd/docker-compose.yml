@@ -8,10 +8,10 @@ services:
       APP_PORT: 3000
 
   web:
-    # Built on the Umbrel device with this exact tag (no registry needed):
-    #   git clone https://github.com/byroncoetsee/btc-cex-tracer.git
-    #   cd btc-cex-tracer && docker build -t byroncoetsee/doxd:1.0.0 .
-    image: byroncoetsee/doxd:1.0.0
+    # Published to GHCR by .github/workflows/docker-publish.yml on every push to
+    # main (image name = the repo, tag = the branch). The package must be set
+    # Public on GitHub so Umbrel can pull it anonymously.
+    image: ghcr.io/byroncoetsee/btc-cex-tracer:main
     restart: on-failure
     stop_grace_period: 1m
     environment:

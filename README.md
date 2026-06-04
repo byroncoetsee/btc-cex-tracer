@@ -128,17 +128,11 @@ byroncoetsee-doxd/            # app folder (id must be <store-id>-<app>)
 
 To install on your Umbrel:
 
-1. **Build the image on the device** (so it matches your Umbrel's CPU arch and needs no registry). SSH in and:
-   ```bash
-   cd ~/umbrel/app-data
-   git clone https://github.com/byroncoetsee/btc-cex-tracer.git doxd-build
-   cd doxd-build && docker build -t byroncoetsee/doxd:1.0.0 .
-   ```
-   The tag must exactly match the `image:` in [`byroncoetsee-doxd/docker-compose.yml`](byroncoetsee-doxd/docker-compose.yml) so the install uses your local image instead of pulling.
+1. **Publish the image to GHCR.** umbrelOS installs by *pulling* the image — it does not build from source and won't use a locally-built image, so the image must be published and public. The [`docker-publish.yml`](.github/workflows/docker-publish.yml) GitHub Action does this automatically: **push to `main`** and it builds and publishes `ghcr.io/byroncoetsee/btc-cex-tracer:main`. Then make the package **Public** (one-time): GitHub → your profile → *Packages → `btc-cex-tracer` → Package settings → Change visibility → Public*. Umbrel pulls anonymously, so a private package gives `pull access denied`. The image name/tag must match the `image:` in [`byroncoetsee-doxd/docker-compose.yml`](byroncoetsee-doxd/docker-compose.yml).
 2. **Add the store** in the Umbrel dashboard: *App Store → ⋯ (top-right) → Community App Stores →* paste `https://github.com/byroncoetsee/btc-cex-tracer` *→ Add*. DOXd then appears in the store — click **Install**.
    - Or from SSH: `~/umbrel/scripts/app install byroncoetsee-doxd`
 
-*Alternative to step 1:* push `byroncoetsee/doxd:1.0.0` to a public registry (Docker Hub / GHCR) once, and installs/updates "just work" without building on-device. To submit to the **official** Umbrel App Store instead, open a PR against [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps).
+To submit to the **official** Umbrel App Store instead, open a PR against [getumbrel/umbrel-apps](https://github.com/getumbrel/umbrel-apps).
 
 ### Where to run it (important)
 
