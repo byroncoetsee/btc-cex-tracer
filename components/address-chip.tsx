@@ -66,7 +66,7 @@ export function AddressChip({
   const isDimmed = isSomethingHovered && !isHighlighted
 
   async function copy(e: React.MouseEvent) {
-    if (stopPropagation) e.stopPropagation()
+    e.stopPropagation()
     e.preventDefault()
     try {
       await navigator.clipboard.writeText(address)
